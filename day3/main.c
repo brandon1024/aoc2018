@@ -26,9 +26,6 @@ int claim_overlaps(int **fabric, struct claim_t claim);
 
 int main(int argc, char *argv[])
 {
-    //debugging
-    freopen("input.in","r",stdin);
-
     //Allocate memory for 2D array of integers
     int **fabric = (int **)malloc(sizeof(int *) * FABRIC_DIM);
     if(fabric == NULL) {
