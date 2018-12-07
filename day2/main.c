@@ -25,6 +25,10 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    for(int i = ids_index; i < ids_len; i++) {
+        ids[i] = NULL;
+    }
+
     char *buffer = (char *)malloc(sizeof(char) * BUFF_LEN);
     if(buffer == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
