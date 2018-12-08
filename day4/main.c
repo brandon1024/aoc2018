@@ -2,28 +2,95 @@
 #include <stdio.h>
 #include <string.h>
 
-#define FABRIC_DIM 1000
 #define BUFF_LEN 64
 
-struct entry_t {
-    unsigned int guard_id;
+struct instant_t {
     unsigned int year;
     unsigned int month: 4;
     unsigned int day: 5;
     unsigned int hour: 5;
     unsigned int min: 6;
+};
+
+struct entry_t {
+    unsigned int guard_id;
+    struct instant_t instant;
     unsigned int shift_begin: 1;
     unsigned int sleep: 1;
     unsigned int wake: 1;
 };
 
+struct list_node_t {
+    struct entry_t data;
+    struct list_node_t *next;
+};
+
+struct list_t {
+    struct list_node_t *head;
+    int len;
+};
+
+struct guard_info_t {
+    unsigned int guard_id;
+    unsigned int sleep_mins[60];
+};
+
 struct entry_t build_entry_from_str(char *buffer, size_t buff_len);
+int insert_entry_into_list_sorted(struct list_t *list, struct list_node_t *node);
+int entry_cmp(struct entry_t entry_a, struct entry_t entry_b);
+struct guard_info_t determine_candidate_guard(struct list_t *entry_list);
+struct guard_info_t *find_guard_info(struct guard_info_t *guard_info, int guard_info_len, int guard_id);
+struct guard_info_t *update_guard_info(struct guard_info_t *guard_info, struct entry_t asleep, struct entry_t awake);
+int likely_guard_sleep_min(struct guard_info_t guard_info);
+int instant_cmp(struct instant_t instant_a, struct instant_t instant_b);
 
 int main(int argc, char *argv[])
 {
-    char buffer[BUFF_LEN] = "[1518-12-31 23:59] Guard #26 begins shift";
-    struct entry_t entry = build_entry_from_str(buffer, BUFF_LEN);
-    printf("%d %d %d %d %d %d %d %d %d\n", entry.year, entry.month, entry.day, entry.hour, entry.min, entry.guard_id, entry.shift_begin, entry.sleep, entry.wake);
+    //debugging
+    freopen("input.in","r",stdin);
+
+    char *buffer = (char *)malloc(sizeof(char) * BUFF_LEN);
+    if(buffer == NULL) {
+        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+        exit(1);
+    }
+
+    //Build linked list of entries
+    struct list_t entry_list;
+    struct list_node_t *node;
+    entry_list.head = NULL;
+    entry_list.len = 0;
+    while((fgets(buffer, BUFF_LEN, stdin)) != NULL) {
+        struct entry_t entry = build_entry_from_str(buffer, BUFF_LEN);
+
+        node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
+        if(node == NULL) {
+            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+            exit(1);
+        }
+
+        node->data = entry;
+        node->next = NULL;
+        insert_entry_into_list_sorted(&entry_list, node);
+    }
+
+    //Determine candidate guard
+    struct guard_info_t candidate_guard = determine_candidate_guard(&entry_list);
+    int candidate_time = likely_guard_sleep_min(candidate_guard);
+    if(candidate_time < 0) {
+        fprintf(stderr, "Unexpected error: More than one candidate time found for guard %d\n", candidate_guard.guard_id);
+        exit(1);
+    }
+
+    fprintf(stdout, "What is the ID of the guard you chose multiplied by the minute you chose? %d (%d * %d)\n", (candidate_guard.guard_id * candidate_time), candidate_guard.guard_id, candidate_time);
+
+    free(buffer);
+    node = entry_list.head;
+    while(node != NULL) {
+        struct list_node_t *tmp = node;
+        node = node->next;
+        free(tmp);
+    }
 
     return 0;
 }
@@ -37,27 +104,27 @@ struct entry_t build_entry_from_str(char *buffer, size_t buff_len)
     start_index = memchr(buffer, '[', buff_len) + 1;
     token = memchr(buffer, '-', buff_len);
     *token = 0;
-    entry.year = (unsigned int)strtol(start_index, &start_index, 10);
+    entry.instant.year = (unsigned int)strtol(start_index, &start_index, 10);
 
     start_index = token + 1;
     token = memchr(buffer, '-', buff_len);
     *token = 0;
-    entry.month = (unsigned int)strtol(start_index, &start_index, 10);
+    entry.instant.month = (unsigned int)strtol(start_index, &start_index, 10);
 
     start_index = token + 1;
     token = memchr(buffer, ' ', buff_len);
     *token = 0;
-    entry.day = (unsigned int)strtol(start_index, &start_index, 10);
+    entry.instant.day = (unsigned int)strtol(start_index, &start_index, 10);
 
     start_index = token + 1;
     token = memchr(buffer, ':', buff_len);
     *token = 0;
-    entry.hour = (unsigned int)strtol(start_index, &start_index, 10);
+    entry.instant.hour = (unsigned int)strtol(start_index, &start_index, 10);
 
     start_index = token + 1;
     token = memchr(buffer, ']', buff_len);
     *token = 0;
-    entry.min = (unsigned int)strtol(start_index, &start_index, 10);
+    entry.instant.min = (unsigned int)strtol(start_index, &start_index, 10);
 
     entry.guard_id = 0;
     entry.shift_begin = 0;
@@ -81,4 +148,246 @@ struct entry_t build_entry_from_str(char *buffer, size_t buff_len)
     }
 
     return entry;
+}
+
+int insert_entry_into_list_sorted(struct list_t *list, struct list_node_t *node)
+{
+    struct list_node_t *next = list->head;
+    list->len = list->len + 1;
+
+    if(next == NULL) {
+        list->head = node;
+        return list->len;
+    }
+
+    struct entry_t insert_entry = node->data;
+    struct entry_t next_entry = next->data;
+    if(entry_cmp(insert_entry, next_entry) < 0) {
+        list->head = node;
+        node->next = next;
+        return list->len;
+    }
+
+    while(next->next != NULL) {
+        next_entry = next->next->data;
+
+        if(entry_cmp(insert_entry, next_entry) < 0) {
+            node->next = next->next;
+            next->next = node;
+            return list->len;
+        }
+
+        next = next->next;
+    }
+
+    next->next = node;
+    return list->len;
+}
+
+int entry_cmp(struct entry_t entry_a, struct entry_t entry_b)
+{
+    return instant_cmp(entry_a.instant, entry_b.instant);
+}
+
+struct guard_info_t determine_candidate_guard(struct list_t *entry_list)
+{
+    int guard_info_len = BUFF_LEN;
+    struct guard_info_t *guard_info = (struct guard_info_t *)malloc(sizeof(struct guard_info_t) * guard_info_len);
+    if(guard_info == NULL) {
+        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+        exit(1);
+    }
+
+    int guard_info_index = 0;
+    struct list_node_t *node = entry_list->head;
+    struct guard_info_t *guard = NULL;
+    while(node != NULL) {
+        struct entry_t entry = node->data;
+        if(entry.wake) {
+            fprintf(stderr, "Unexpected error: Out of order entry list\n");
+            exit(1);
+        }
+
+        if(entry.sleep && guard == NULL) {
+            fprintf(stderr, "Unexpected error: Out of order entry list\n");
+            exit(1);
+        }
+
+        if(entry.shift_begin) {
+            guard = find_guard_info(guard_info, guard_info_index, entry.guard_id);
+            if(guard == NULL) {
+                //add new guard info
+                struct guard_info_t new_guard_info;
+                new_guard_info.guard_id = entry.guard_id;
+                memset(new_guard_info.sleep_mins, 0, sizeof(int) * 60);
+
+                if(guard_info_index >= guard_info_len) {
+                    guard_info_len = guard_info_len + BUFF_LEN;
+                    guard_info = (struct guard_info_t *)realloc(guard_info, sizeof(struct guard_info_t) * guard_info_len);
+                }
+
+                guard_info[guard_info_index] = new_guard_info;
+                guard_info_index++;
+
+                guard = guard_info + guard_info_index;
+            }
+        } else if(entry.sleep) {
+            struct list_node_t *sleep_node = node;
+            node = node->next;
+
+            if(node == NULL) {
+                fprintf(stderr, "Unexpected error: Unexpected end of entry list\n");
+                exit(1);
+            }
+
+            if(!node->data.wake) {
+                fprintf(stderr, "Unexpected error: Out of order entry list\n");
+                exit(1);
+            }
+
+            update_guard_info(guard, sleep_node->data, node->data);
+        }
+
+        node = node->next;
+    }
+
+    //find best guard
+    guard = NULL;
+    for(int i = 0; i < guard_info_len; i++) {
+        if(guard == NULL) {
+            guard = guard_info + i;
+        } else {
+            int best_guard_mins_tot = 0;
+            int curr_guard_mins_tot = 0;
+
+            for(int j = 0; j < 60; j++) {
+                best_guard_mins_tot += guard->sleep_mins[j];
+                curr_guard_mins_tot += guard_info[i].sleep_mins[j];
+            }
+
+            if(curr_guard_mins_tot > best_guard_mins_tot) {
+                guard = guard_info + i;
+            }
+        }
+    }
+
+    if(guard == NULL) {
+        fprintf(stderr, "Unexpected error: Could not determine best guard\n");
+        exit(1);
+    }
+
+    struct guard_info_t candidate_guard;
+    candidate_guard.guard_id = guard->guard_id;
+    for(int i = 0; i < 60; i++) {
+        candidate_guard.sleep_mins[i] = guard->sleep_mins[i];
+    }
+
+    free(guard_info);
+
+    return candidate_guard;
+}
+
+struct guard_info_t *find_guard_info(struct guard_info_t *guard_info, int guard_info_len, int guard_id)
+{
+    for(int i = 0; i < guard_info_len; i++) {
+        if(guard_info[i].guard_id == guard_id) {
+            return guard_info + i;
+        }
+    }
+
+    return NULL;
+}
+
+struct guard_info_t *update_guard_info(struct guard_info_t *guard_info, struct entry_t asleep, struct entry_t awake)
+{
+    const int month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+    struct instant_t current = asleep.instant;
+    while(!instant_cmp(current, awake.instant)) {
+        guard_info->sleep_mins[current.min] = guard_info->sleep_mins[current.min] + 1;
+
+        if(current.min < 59) {
+            current.min = current.min + 1;
+            continue;
+        }
+
+        current.min = 0;
+        if(current.hour < 23) {
+            current.hour = current.hour + 1;
+            continue;
+        }
+
+        current.hour = 0;
+        if(current.day < month_days[current.month - 1]) {
+            current.day = current.day + 1;
+            continue;
+        }
+
+        current.day = 1;
+        if(current.month < 12) {
+            current.month = current.month + 1;
+            continue;
+        }
+
+        current.month = 1;
+        current.year = current.year + 1;
+    }
+
+    return guard_info;
+}
+
+int likely_guard_sleep_min(struct guard_info_t guard_info)
+{
+    int likely_time_index = 0;
+    int duplicate_time_index = 0;
+
+    for(int i = 1; i < 60; i++) {
+        if(guard_info.sleep_mins[i] > guard_info.sleep_mins[likely_time_index]) {
+            likely_time_index = i;
+            duplicate_time_index = 0;
+        } else if(guard_info.sleep_mins[i] == guard_info.sleep_mins[likely_time_index]) {
+            duplicate_time_index = 1;
+        }
+    }
+
+    if(duplicate_time_index) {
+        return -1;
+    }
+
+    return likely_time_index;
+}
+
+int instant_cmp(struct instant_t instant_a, struct instant_t instant_b)
+{
+    if(instant_a.year > instant_b.year) {
+        return 1;
+    } else if(instant_a.year < instant_b.year) {
+        return -1;
+    }
+
+    if(instant_a.month > instant_b.month) {
+        return 1;
+    } else if(instant_a.month < instant_b.month) {
+        return -1;
+    }
+
+    if(instant_a.day > instant_b.day) {
+        return 1;
+    } else if(instant_a.day < instant_b.day) {
+        return -1;
+    }
+
+    if(instant_a.hour > instant_b.hour) {
+        return 1;
+    } else if(instant_a.hour < instant_b.hour) {
+        return -1;
+    }
+
+    if(instant_a.min > instant_b.min) {
+        return 1;
+    } else if(instant_a.min < instant_b.min) {
+        return -1;
+    }
+
+    return 0;
 }
