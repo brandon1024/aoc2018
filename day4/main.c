@@ -303,7 +303,7 @@ struct guard_info_t *update_guard_info(struct guard_info_t *guard_info, struct e
     const int month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
     struct instant_t current = asleep.instant;
-    while(!instant_cmp(current, awake.instant)) {
+    while(instant_cmp(current, awake.instant) < 0) {
         guard_info->sleep_mins[current.min] = guard_info->sleep_mins[current.min] + 1;
 
         if(current.min < 59) {
