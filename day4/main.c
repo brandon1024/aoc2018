@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MOST_MIN_ASLEEP_STRATEGY 0
+#define MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY 1
+
 #define BUFF_LEN 64
 
 struct instant_t {
@@ -33,15 +36,17 @@ struct list_t {
 struct guard_info_t {
     unsigned int guard_id;
     unsigned int sleep_mins[60];
+    unsigned int candidate_min: 6;
 };
 
 struct entry_t build_entry_from_str(char *buffer, size_t buff_len);
 int insert_entry_into_list_sorted(struct list_t *list, struct list_node_t *node);
 int entry_cmp(struct entry_t entry_a, struct entry_t entry_b);
-struct guard_info_t determine_candidate_guard(struct list_t *entry_list);
+struct guard_info_t determine_candidate_guard(struct list_t *entry_list, int strategy);
+struct guard_info_t most_frequently_asleep_guard(struct guard_info_t *guard_info, int guard_info_len);
+struct guard_info_t most_frequently_asleep_same_min_guard(struct guard_info_t *guard_info, int guard_info_len);
 struct guard_info_t *find_guard_info(struct guard_info_t *guard_info, int guard_info_len, int guard_id);
 struct guard_info_t *update_guard_info(struct guard_info_t *guard_info, struct entry_t asleep, struct entry_t awake);
-int likely_guard_sleep_min(struct guard_info_t guard_info);
 int instant_cmp(struct instant_t instant_a, struct instant_t instant_b);
 
 int main(int argc, char *argv[])
@@ -74,15 +79,21 @@ int main(int argc, char *argv[])
         insert_entry_into_list_sorted(&entry_list, node);
     }
 
-    //Determine candidate guard
-    struct guard_info_t candidate_guard = determine_candidate_guard(&entry_list);
-    int candidate_time = likely_guard_sleep_min(candidate_guard);
-    if(candidate_time < 0) {
-        fprintf(stderr, "Unexpected error: More than one candidate time found for guard %d\n", candidate_guard.guard_id);
-        exit(1);
-    }
+    //Strategy MOST_MIN_ASLEEP_STRATEGY
+    struct guard_info_t candidate_guard = determine_candidate_guard(&entry_list, MOST_MIN_ASLEEP_STRATEGY);
+    fprintf(stdout, "MOST_MIN_ASLEEP_STRATEGY\n");
+    fprintf(stdout, "What is the ID of the guard you chose multiplied by the minute you chose? %d (%d * %d)\n",
+            (candidate_guard.guard_id * candidate_guard.candidate_min),
+            candidate_guard.guard_id,
+            candidate_guard.candidate_min);
 
-    fprintf(stdout, "What is the ID of the guard you chose multiplied by the minute you chose? %d (%d * %d)\n", (candidate_guard.guard_id * candidate_time), candidate_guard.guard_id, candidate_time);
+    //Strategy MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY
+    candidate_guard = determine_candidate_guard(&entry_list, MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY);
+    fprintf(stdout, "MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY\n");
+    fprintf(stdout, "What is the ID of the guard you chose multiplied by the minute you chose? %d (%d * %d)\n",
+            (candidate_guard.guard_id * candidate_guard.candidate_min),
+            candidate_guard.guard_id,
+            candidate_guard.candidate_min);
 
     free(buffer);
     node = entry_list.head;
@@ -184,12 +195,7 @@ int insert_entry_into_list_sorted(struct list_t *list, struct list_node_t *node)
     return list->len;
 }
 
-int entry_cmp(struct entry_t entry_a, struct entry_t entry_b)
-{
-    return instant_cmp(entry_a.instant, entry_b.instant);
-}
-
-struct guard_info_t determine_candidate_guard(struct list_t *entry_list)
+struct guard_info_t determine_candidate_guard(struct list_t *entry_list, int strategy)
 {
     int guard_info_len = BUFF_LEN;
     struct guard_info_t *guard_info = (struct guard_info_t *)malloc(sizeof(struct guard_info_t) * guard_info_len);
@@ -251,8 +257,21 @@ struct guard_info_t determine_candidate_guard(struct list_t *entry_list)
         node = node->next;
     }
 
-    //find best guard
-    guard = NULL;
+    struct guard_info_t candidate_guard;
+    if(strategy == MOST_MIN_ASLEEP_STRATEGY) {
+        candidate_guard = most_frequently_asleep_guard(guard_info, guard_info_index);
+    } else {
+        candidate_guard = most_frequently_asleep_same_min_guard(guard_info, guard_info_index);
+    }
+
+    free(guard_info);
+
+    return candidate_guard;
+}
+
+struct guard_info_t most_frequently_asleep_guard(struct guard_info_t *guard_info, int guard_info_len)
+{
+    struct guard_info_t *guard = NULL;
     for(int i = 0; i < guard_info_len; i++) {
         if(guard == NULL) {
             guard = guard_info + i;
@@ -278,11 +297,71 @@ struct guard_info_t determine_candidate_guard(struct list_t *entry_list)
 
     struct guard_info_t candidate_guard;
     candidate_guard.guard_id = guard->guard_id;
-    for(int i = 0; i < 60; i++) {
-        candidate_guard.sleep_mins[i] = guard->sleep_mins[i];
+    memcpy(candidate_guard.sleep_mins, guard->sleep_mins, 60 * sizeof(int));
+
+    unsigned int likely_min_index = 0;
+    unsigned int duplicate_min_index = 0;
+    for(unsigned int i = 1; i < 60; i++) {
+        if(candidate_guard.sleep_mins[i] > candidate_guard.sleep_mins[likely_min_index]) {
+            likely_min_index = i;
+            duplicate_min_index = 0;
+        } else if(candidate_guard.sleep_mins[i] == candidate_guard.sleep_mins[likely_min_index]) {
+            duplicate_min_index = 1;
+        }
     }
 
-    free(guard_info);
+    if(duplicate_min_index) {
+        fprintf(stderr, "Unexpected error: Could not determine best guard\n");
+        exit(1);
+    }
+
+    candidate_guard.candidate_min = likely_min_index;
+
+    return candidate_guard;
+}
+
+struct guard_info_t most_frequently_asleep_same_min_guard(struct guard_info_t *guard_info, int guard_info_len)
+{
+    struct guard_info_t **leading_sleep_freqs = (struct guard_info_t **)malloc(sizeof(struct guard_info_t *) * 60);
+    if(leading_sleep_freqs == NULL) {
+        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+        exit(1);
+    }
+
+    for(int i = 0; i < 60; i++) {
+        leading_sleep_freqs[i] = NULL;
+    }
+
+    for(int guard_info_index = 0; guard_info_index < guard_info_len; guard_info_index++) {
+        struct guard_info_t *current_guard = guard_info + guard_info_index;
+
+        for(int i = 0; i < 60; i++) {
+            if(leading_sleep_freqs[i] == NULL || current_guard->sleep_mins[i] > leading_sleep_freqs[i]->sleep_mins[i]) {
+                leading_sleep_freqs[i] = current_guard;
+            }
+        }
+    }
+
+    struct guard_info_t *current_best_guard = NULL;
+    unsigned int current_best_min = 0;
+    for(unsigned int i = 0; i < 60; i++) {
+        if(current_best_guard == NULL || leading_sleep_freqs[i]->sleep_mins[i] > current_best_guard->sleep_mins[current_best_min]) {
+            current_best_guard = leading_sleep_freqs[i];
+            current_best_min = i;
+        }
+    }
+
+    if(current_best_guard == NULL) {
+        fprintf(stderr, "Unexpected error: Could not determine best guard\n");
+        exit(1);
+    }
+
+    struct guard_info_t candidate_guard;
+    candidate_guard.guard_id = current_best_guard->guard_id;
+    memcpy(candidate_guard.sleep_mins, current_best_guard->sleep_mins, 60 * sizeof(int));
+    candidate_guard.candidate_min = current_best_min;
+
+    free(leading_sleep_freqs);
 
     return candidate_guard;
 }
@@ -336,25 +415,9 @@ struct guard_info_t *update_guard_info(struct guard_info_t *guard_info, struct e
     return guard_info;
 }
 
-int likely_guard_sleep_min(struct guard_info_t guard_info)
+int entry_cmp(struct entry_t entry_a, struct entry_t entry_b)
 {
-    int likely_time_index = 0;
-    int duplicate_time_index = 0;
-
-    for(int i = 1; i < 60; i++) {
-        if(guard_info.sleep_mins[i] > guard_info.sleep_mins[likely_time_index]) {
-            likely_time_index = i;
-            duplicate_time_index = 0;
-        } else if(guard_info.sleep_mins[i] == guard_info.sleep_mins[likely_time_index]) {
-            duplicate_time_index = 1;
-        }
-    }
-
-    if(duplicate_time_index) {
-        return -1;
-    }
-
-    return likely_time_index;
+    return instant_cmp(entry_a.instant, entry_b.instant);
 }
 
 int instant_cmp(struct instant_t instant_a, struct instant_t instant_b)
