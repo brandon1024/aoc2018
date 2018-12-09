@@ -51,9 +51,6 @@ int instant_cmp(struct instant_t instant_a, struct instant_t instant_b);
 
 int main(int argc, char *argv[])
 {
-    //debugging
-    freopen("input.in","r",stdin);
-
     char *buffer = (char *)malloc(sizeof(char) * BUFF_LEN);
     if(buffer == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
