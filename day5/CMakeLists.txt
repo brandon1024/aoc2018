@@ -4,3 +4,5 @@ project(aocd5 C)
 set(CMAKE_C_STANDARD 99)
 
 add_executable(aocd5 main.c)
+
+configure_file(input.in input.in COPYONLY)
