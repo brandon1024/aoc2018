@@ -10,33 +10,33 @@ struct coord_t {
     int y;
 };
 
-struct vector_t {
-    struct coord_t point_a;
-    struct coord_t point_b;
-};
-
 struct list_node_t {
     struct coord_t data;
     struct list_node_t *next;
+    int locked: 1;
 };
 
-struct point_info_t {
+struct voronoi_point_t {
     struct coord_t coord;
     struct list_node_t *area_coords;
-    unsigned int point_area_size;
+    int point_area_size;
+    unsigned int inf: 1;
+    unsigned int enclosed: 1;
 };
 
-struct coord_t build_coord_from_input(char *buffer, size_t buff_len);
+struct coord_t build_coord_from_input(char buffer[], size_t buff_len);
 int determine_largest_area(struct coord_t coords[], int coords_len);
-int compute_point_areas(struct point_info_t point_infos[], int point_info_len);
-int is_area_inf(struct point_info_t *point);
-int coord_belong_to_point_area(struct point_info_t *point, struct coord_t coord);
-int falls_within_manhattan_distance(struct vector_t vector, struct coord_t coord);
-double direct_distance_between_points(struct coord_t point_a, struct coord_t point_b);
-struct point_info_t **sort_point_infos_by_closest_distance(struct point_info_t src[], int len, struct point_info_t *dest[], int skip_index);
+int compute_point_areas(struct voronoi_point_t points[], int points_len);
+int grow_cell(struct voronoi_point_t points[], int points_len, struct voronoi_point_t *focus, struct list_node_t **contentious_cells, struct coord_t coord);
+int determine_global_boundaries(struct voronoi_point_t points[], int points_len, int *lower_x, int *upper_x, int *lower_y, int *upper_y);
+int is_coord_outside_boundaries(struct coord_t coord, int lower_x, int upper_x, int lower_y, int upper_y);
+int is_coord_in_list(struct list_node_t *head, struct coord_t coord);
+void mark_cells_as_locked(struct voronoi_point_t *point);
 
 int main(int argc, char *argv[])
 {
+    freopen("test.in","r",stdin);
+
     char buffer[BUFF_LEN];
 
     int coords_len = BUFF_LEN * 2;
@@ -66,6 +66,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Unexpected error: could not determine largest area.\n");
         exit(1);
     }
+
+    fprintf(stdout, "What is the size of the largest area that isn't infinite? %d\n", largest_area);
 
     free(coords);
 
@@ -105,225 +107,256 @@ struct coord_t build_coord_from_input(char buffer[], size_t buff_len)
 
 int determine_largest_area(struct coord_t coords[], int coords_len)
 {
-    struct point_info_t *point_infos = (struct point_info_t *)malloc(sizeof(struct point_info_t) * coords_len);
-    if(point_infos == NULL) {
+    struct voronoi_point_t *points = (struct voronoi_point_t *)malloc(sizeof(struct voronoi_point_t) * coords_len);
+    if(points == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
         exit(1);
     }
 
     for(int i = 0; i < coords_len; i++) {
-        struct point_info_t point_info = {.coord = coords[i], .area_coords = NULL, .point_area_size = 0};
+        struct voronoi_point_t point_info = {.coord = coords[i], .area_coords = NULL, .point_area_size = 0, .inf = 0, .enclosed = 0};
 
-        point_infos[i] = point_info;
+        points[i] = point_info;
     }
 
-    compute_point_areas(point_infos, coords_len);
+    compute_point_areas(points, coords_len);
 
     int largest_area = -1;
     for(int i = 0; i < coords_len; i++) {
-        if(is_area_inf(point_infos + i)) {
+        if(points[i].inf) {
             continue;
         }
 
-        if(point_infos[i].point_area_size > largest_area) {
-            largest_area = point_infos[i].point_area_size;
+        if(points[i].point_area_size > largest_area) {
+            largest_area = points[i].point_area_size;
         }
     }
 
-    free(point_infos);
+    free(points);
 
     return largest_area;
 }
 
-int compute_point_areas(struct point_info_t point_infos[], int point_info_len)
+int compute_point_areas(struct voronoi_point_t points[], int points_len)
 {
-    struct point_info_t **sorted_point_infos = (struct point_info_t **)malloc(sizeof(struct point_info_t *) * point_info_len - 1);
-    if(sorted_point_infos == NULL) {
+    int lower_x = 0;
+    int upper_x = 0;
+    int lower_y = 0;
+    int upper_y = 0;
+    determine_global_boundaries(points, points_len, &lower_x, &upper_x, &lower_y, &upper_y);
+
+    struct list_node_t *contentious_cells = NULL;
+
+    int still_growing = 1;
+    int tessellation_radius = 1;
+    while(still_growing) {
+        still_growing = 0;
+
+        for(int i = 0; i < points_len; i++) {
+            if(points[i].enclosed) {
+                continue;
+            }
+
+            for(int y_offset = -tessellation_radius; y_offset <= tessellation_radius; y_offset++) {
+                struct coord_t coord = {
+                    .x = points[i].coord.x + (tessellation_radius - abs(y_offset)),
+                    .y = points[i].coord.y + y_offset
+                };
+
+                if(!is_coord_outside_boundaries(coord, lower_x, upper_x, lower_y, upper_y)) {
+                    if(grow_cell(points, points_len, points + i, &contentious_cells, coord)) {
+                        still_growing = 1;
+                    }
+                } else {
+                    points[i].inf = 1;
+                }
+
+                if(coord.x == points[i].coord.x) {
+                    continue;
+                }
+
+                coord.x = points[i].coord.x - (tessellation_radius - abs(y_offset));
+
+                if(!is_coord_outside_boundaries(coord, lower_x, upper_x, lower_y, upper_y)) {
+                    if(grow_cell(points, points_len, points + i, &contentious_cells, coord)) {
+                        still_growing = 1;
+                    }
+                } else {
+                    points[i].inf = 1;
+                }
+            }
+        }
+
+        //mark all cells as locked
+        for(int i = 0; i < points_len; i++) {
+            mark_cells_as_locked(points + i);
+        }
+
+        tessellation_radius++;
+    }
+
+    for(int i = 0; i < points_len; i++) {
+        int area = 0;
+        struct list_node_t *next = points[i].area_coords;
+        while(next != NULL) {
+            area++;
+
+            struct list_node_t *tmp = next->next;
+            free(next);
+            next = tmp;
+        }
+
+        points[i].point_area_size = area;
+        points[i].area_coords = NULL;
+    }
+
+    while(contentious_cells != NULL) {
+        struct list_node_t *tmp = contentious_cells->next;
+        free(contentious_cells);
+        contentious_cells = tmp;
+    }
+
+    return 1;
+}
+
+int grow_cell(struct voronoi_point_t points[], int points_len, struct voronoi_point_t *focus, struct list_node_t **contentious_cells, struct coord_t coord)
+{
+    //if coordinate is in contention, skip
+    if(is_coord_in_list(*contentious_cells, coord)) {
+        return 0;
+    }
+
+    //Try to find coord in other voronoi point areas
+    struct voronoi_point_t *found = NULL;
+    for(int j = 0; j < points_len; j++) {
+        if(focus != points + j && is_coord_in_list(points[j].area_coords, coord)) {
+            found = points + j;
+            break;
+        }
+    }
+
+    //if coord not found in other areas, mark as belonging to current voronoi cell
+    if(found != NULL) {
+        //remove cell from points[j] if unlocked
+        struct list_node_t *next = found->area_coords;
+        if(next->data.x == coord.x && next->data.y == coord.y) {
+            if(next->locked) {
+                return 0;
+            }
+
+            found->area_coords = next->next;
+            free(next);
+        } else {
+            //free middle node
+            while(next->next != NULL) {
+                struct list_node_t *tmp = next->next;
+                if(tmp->data.x == coord.x && tmp->data.y == coord.y) {
+                    if(tmp->locked) {
+                        return 0;
+                    }
+
+                    next->next = tmp->next;
+                    free(tmp);
+                    break;
+                }
+
+                next = tmp;
+            }
+        }
+
+        struct list_node_t *node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
+        if(node == NULL) {
+            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+            exit(1);
+        }
+
+        node->data = coord;
+        node->next = *contentious_cells;
+        *contentious_cells = node;
+
+        return 0;
+    }
+
+    struct list_node_t *node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
+    if(node == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
         exit(1);
     }
 
-    for(int point_info_index = 0; point_info_index < point_info_len; point_info_index++) {
-        sorted_point_infos = sort_point_infos_by_closest_distance(point_infos, point_info_len, sorted_point_infos, point_info_index);
+    node->data = coord;
+    node->locked = 0;
+    node->next = focus->area_coords;
+    focus->area_coords = node;
 
-        for(int i = 0; i < point_info_len - 1; i++) {
-            struct vector_t vector = {.point_a = point_infos[point_info_index].coord, .point_b = sorted_point_infos[i]->coord};
+    return 1;
+}
 
-            const int delta_x = vector.point_b.x - vector.point_a.x;
-            const int delta_y = vector.point_b.y - vector.point_a.y;
-            const int mid = ((abs(delta_x) + abs(delta_y)) - 1) / 2;
-
-            for(int offset_x = 0; offset_x <= mid && offset_x < abs(delta_x); offset_x++) {
-                const int x = (delta_x < 0) ? vector.point_a.x - offset_x : vector.point_a.x + offset_x;
-
-                for(int offset_y = 0; (offset_x + offset_y) <= mid  && offset_y < abs(delta_y); offset_y++) {
-                    const int y = (delta_y < 0) ? vector.point_a.y - offset_y : vector.point_a.y + offset_y;
-
-                    if(x == vector.point_a.x && y == vector.point_a.y) {
-                        continue;
-                    }
-
-                    struct coord_t coord = {.x = x, .y = y};
-
-                }
-            }
-        }
+int determine_global_boundaries(struct voronoi_point_t points[], int points_len, int *lower_x, int *upper_x, int *lower_y, int *upper_y)
+{
+    if(points_len == 0) {
+        return 0;
     }
 
-    for(int point_info_index = 0; point_info_index < point_info_len; point_info_index++) {
-        struct list_node_t *node = point_infos->area_coords;
-        while(node != NULL) {
-            struct list_node_t *tmp = node->next;
-            free(node);
-            node->next = NULL;
+    *lower_x = points[0].coord.x;
+    *upper_x = points[0].coord.x;
+    *lower_y = points[0].coord.y;
+    *upper_y = points[0].coord.y;
 
-            node = tmp;
+    for(int i = 0; i < points_len; i++) {
+        struct voronoi_point_t point = points[i];
+
+        if(point.coord.x < *lower_x) {
+            *lower_x = point.coord.x;
+        }
+
+        if(point.coord.x > *upper_x) {
+            *upper_x = point.coord.x;
+        }
+
+        if(point.coord.y < *lower_y) {
+            *lower_y = point.coord.y;
+        }
+
+        if(point.coord.y > *upper_y) {
+            *upper_y = point.coord.y;
         }
     }
 
     return 1;
 }
 
-int is_area_inf(struct point_info_t *point)
+int is_coord_outside_boundaries(struct coord_t coord, int lower_x, int upper_x, int lower_y, int upper_y)
 {
-    struct coord_t coord;
-
-    coord.y = point->coord.y;
-    coord.x = point->coord.x - 1;
-    if(!coord_belong_to_point_area(point, coord)) {
+    if(coord.x < lower_x || coord.x > upper_x) {
         return 1;
     }
 
-    coord.x = point->coord.x + 1;
-    if(!coord_belong_to_point_area(point, coord)) {
-        return 1;
-    }
-
-    coord.x = point->coord.x;
-    coord.y = point->coord.y - 1;
-    if(!coord_belong_to_point_area(point, coord)) {
-        return 1;
-    }
-
-    coord.y = point->coord.y + 1;
-    if(!coord_belong_to_point_area(point, coord)) {
+    if(coord.y < lower_y || coord.y > upper_y) {
         return 1;
     }
 
     return 0;
 }
 
-int coord_belong_to_point_area(struct point_info_t *point, struct coord_t coord)
+int is_coord_in_list(struct list_node_t *head, struct coord_t coord)
 {
-    struct list_node_t *node = point->area_coords;
-    while(node != NULL) {
-        struct coord_t area_coord = node->data;
-
-        if(area_coord.x == coord.x && area_coord.y == coord.y) {
+    struct list_node_t *next = head;
+    while(next != NULL) {
+        if(next->data.x == coord.x && next->data.y == coord.y) {
             return 1;
         }
 
-        node = node->next;
+        next = next->next;
     }
 
     return 0;
 }
 
-int falls_within_manhattan_distance(struct vector_t vector, struct coord_t coord)
+void mark_cells_as_locked(struct voronoi_point_t *point)
 {
-    const int delta_x = vector.point_b.x - vector.point_a.x;
-    const int delta_y = vector.point_b.y - vector.point_a.y;
-    const int mid = ((abs(delta_x) + abs(delta_y)) - 1) / 2;
-
-    if((delta_x <= 0) && ((coord.x > vector.point_a.x) || (coord.x < (vector.point_a.x + delta_x)))) {
-        return 0;
+    struct list_node_t *next = point->area_coords;
+    while(next != NULL) {
+        next->locked = 1;
+        next = next->next;
     }
-
-    if((delta_x >= 0) && ((coord.x < vector.point_a.x) || (coord.x > (vector.point_a.x + delta_x)))) {
-        return 0;
-    }
-
-    if((delta_y <= 0) && ((coord.y > vector.point_a.y) || (coord.y < (vector.point_a.y + delta_y)))) {
-        return 0;
-    }
-
-    if((delta_y >= 0) && ((coord.y < vector.point_a.y) || (coord.y > (vector.point_a.y + delta_y)))) {
-        return 0;
-    }
-
-    int i;
-    if(delta_x < 0) {
-        i = vector.point_a.x - coord.x;
-    } else {
-        i = coord.x - vector.point_a.x;
-    }
-
-    if(delta_y < 0) {
-        i += vector.point_a.y - coord.y;
-    } else {
-        i += coord.y - vector.point_a.y;
-    }
-
-    if(i <= mid) {
-        return 1;
-    }
-
-    return 0;
-}
-
-double direct_distance_between_points(struct coord_t point_a, struct coord_t point_b)
-{
-    return sqrt(pow(point_a.x - point_b.x, 2.0) + pow(point_a.y - point_b.y, 2.0));
-}
-
-struct point_info_t **sort_point_infos_by_closest_distance(struct point_info_t src[], int len, struct point_info_t *dest[], int skip_index)
-{
-    int dest_index = 0;
-
-    struct point_info_t *best = NULL;
-    while(dest_index < len - 1) {
-        struct point_info_t *current_best = NULL;
-
-        for(int i = 0; i < len; i++) {
-            if(i == skip_index) {
-                continue;
-            }
-
-            if(best == NULL) {
-                if(current_best == NULL) {
-                    current_best = src + i;
-                    continue;
-                }
-
-                double dist_to_curr_best = direct_distance_between_points(src[skip_index].coord, current_best->coord);
-                double dist_to_i = direct_distance_between_points(src[skip_index].coord, src[i].coord);
-
-                if(dist_to_i < dist_to_curr_best) {
-                    current_best = src + i;
-                }
-            } else {
-                double dist_to_i = direct_distance_between_points(src[skip_index].coord, src[i].coord);
-                double dist_to_best = direct_distance_between_points(src[skip_index].coord, best->coord);
-
-                if(current_best == NULL) {
-                    if(dist_to_i >= dist_to_best && best != (src + i)) {
-                        current_best = src + i;
-                    }
-
-                    continue;
-                }
-
-                double dist_to_curr_best = direct_distance_between_points(src[skip_index].coord, current_best->coord);
-                if(dist_to_i > dist_to_best && dist_to_i < dist_to_curr_best) {
-                    current_best = src + i;
-                }
-            }
-        }
-
-        dest[dest_index] = current_best;
-        dest_index++;
-        best = current_best;
-    }
-
-    return dest;
 }
