@@ -30,10 +30,6 @@ struct grid_bounds_t {
     int upper_y;
 };
 
-//Goals:
-//Biggest: 5975
-//Area Size: 38670
-
 struct coord_t build_coord_from_input(char buffer[], size_t buff_len);
 int determine_largest_area(struct coord_t coords[], int coords_len);
 int compute_point_areas(struct voronoi_point_t points[], int points_len);
@@ -47,8 +43,6 @@ struct list_node_t *is_coord_in_list(struct list_node_t *head, struct coord_t co
 
 int main(int argc, char *argv[])
 {
-    freopen("input.in","r",stdin);
-
     char buffer[BUFF_LEN];
 
     int coords_len = BUFF_LEN * 2;
@@ -219,13 +213,10 @@ int grow_area(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
         struct coord_t boundary_coord = next->data;
         struct coord_t focus_coord = focus->coord;
 
-        int keep_old = 0;
         if(boundary_coord.x <= focus_coord.x) {
             struct coord_t new_boundary_coord = {.x = boundary_coord.x - 1, .y = boundary_coord.y};
             if(grow_cell(bounds, points, points_len, focus, contentious_cells, new_boundary_coord)) {
                 still_growing = 1;
-            } else {
-                keep_old = 1;
             }
         }
 
@@ -233,8 +224,6 @@ int grow_area(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
             struct coord_t new_boundary_coord = {.x = boundary_coord.x + 1, .y = boundary_coord.y};
             if(grow_cell(bounds, points, points_len, focus, contentious_cells, new_boundary_coord)) {
                 still_growing = 1;
-            } else {
-                keep_old = 1;
             }
         }
 
@@ -242,8 +231,6 @@ int grow_area(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
             struct coord_t new_boundary_coord = {.x = boundary_coord.x, .y = boundary_coord.y + 1};
             if(grow_cell(bounds, points, points_len, focus, contentious_cells, new_boundary_coord)) {
                 still_growing = 1;
-            } else {
-                keep_old = 1;
             }
         }
 
@@ -251,31 +238,10 @@ int grow_area(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
             struct coord_t new_boundary_coord = {.x = boundary_coord.x, .y = boundary_coord.y - 1};
             if(grow_cell(bounds, points, points_len, focus, contentious_cells, new_boundary_coord)) {
                 still_growing = 1;
-            } else {
-                keep_old = 1;
             }
         }
 
-        struct list_node_t *tmp = next;
         next = next->next;
-
-        if(!keep_old) {
-            if(tmp == focus->boundary_coords) {
-                focus->boundary_coords = tmp->next;
-            } else {
-                struct list_node_t *curr = focus->boundary_coords;
-                while(curr->next != NULL) {
-                    if(curr->next == tmp) {
-                        curr->next = tmp->next;
-                        break;
-                    }
-
-                    curr = curr->next;
-                }
-            }
-
-            free(tmp);
-        }
     }
 
     return still_growing;
@@ -284,8 +250,6 @@ int grow_area(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
 int grow_cell(struct grid_bounds_t bounds, struct voronoi_point_t points[], int points_len,
         struct voronoi_point_t *focus, struct list_node_t **contentious_cells, struct coord_t new_boundary_coord)
 {
-    //first, check if new boundary coord is already used by another cell (boundary cells only)
-        //if so, return 0
     for(int i = 0; i < points_len; i++) {
         if(points + i == focus) {
             continue;
@@ -296,16 +260,10 @@ int grow_cell(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
         }
     }
 
-    //next, check if contentious cell
-        //if so, return 0
     if(is_coord_in_list(*contentious_cells, new_boundary_coord) != NULL) {
         return 0;
     }
 
-    //next, check if boundary coord is already marked as a candidate in another cell
-        //if so, remove other candidate cell
-        //add to list of contentious cells
-        //return 0
     struct voronoi_point_t *parent = points;
     struct list_node_t *candidate = NULL;
     for(int i = 0; i < points_len; i++) {
@@ -342,16 +300,11 @@ int grow_cell(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
         return 0;
     }
 
-    //next, check if boundary coord is outside global boundaries
-        //if so, mark as inf
-        //return 0
     if(is_coord_outside_boundaries(new_boundary_coord, bounds)) {
         focus->inf = 1;
         return 0;
     }
 
-    //add coord to list of candidate boundaries
-    //return 1
     struct list_node_t *new_boundary_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
     if(new_boundary_node == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
