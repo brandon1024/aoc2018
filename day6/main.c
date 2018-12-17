@@ -32,12 +32,13 @@ struct grid_bounds_t {
 
 struct coord_t build_coord_from_input(char buffer[], size_t buff_len);
 int determine_largest_area(struct coord_t coords[], int coords_len);
-int compute_point_areas(struct voronoi_point_t points[], int points_len);
+int compute_point_areas(struct voronoi_point_t points[], int points_len, struct grid_bounds_t bounds);
 int grow_area(struct grid_bounds_t bounds, struct voronoi_point_t points[], int points_len,
         struct voronoi_point_t *focus, struct list_node_t **contentious_cells);
 int grow_cell(struct grid_bounds_t bounds, struct voronoi_point_t points[], int points_len,
         struct voronoi_point_t *focus, struct list_node_t **contentious_cells, struct coord_t new_boundary_coord);
-struct grid_bounds_t determine_global_boundaries(struct voronoi_point_t points[], int points_len);
+struct grid_bounds_t determine_global_boundaries(struct coord_t coords[], int coords_len);
+int determine_region_size(struct coord_t coords[], int coords_len);
 int is_coord_outside_boundaries(struct coord_t coord, struct grid_bounds_t bounds);
 struct list_node_t *is_coord_in_list(struct list_node_t *head, struct coord_t coord);
 
@@ -74,6 +75,9 @@ int main(int argc, char *argv[])
     }
 
     fprintf(stdout, "What is the size of the largest area that isn't infinite? %d\n", largest_area);
+
+    int region_size = determine_region_size(coords, coords_index);
+    fprintf(stdout, "What is the size of the region containing all locations which have a total distance to all given coordinates of less than 10000? %d\n", region_size);
 
     free(coords);
 
@@ -140,7 +144,8 @@ int determine_largest_area(struct coord_t coords[], int coords_len)
         points[i] = point_info;
     }
 
-    compute_point_areas(points, coords_len);
+    struct grid_bounds_t bounds = determine_global_boundaries(coords, coords_len);
+    compute_point_areas(points, coords_len, bounds);
 
     int largest_area = -1;
     for(int i = 0; i < coords_len; i++) {
@@ -154,10 +159,8 @@ int determine_largest_area(struct coord_t coords[], int coords_len)
     return largest_area;
 }
 
-int compute_point_areas(struct voronoi_point_t points[], int points_len)
+int compute_point_areas(struct voronoi_point_t points[], int points_len, struct grid_bounds_t bounds)
 {
-    struct grid_bounds_t bounds = determine_global_boundaries(points, points_len);
-
     struct list_node_t *contentious_cells = NULL;
 
     int still_growing = 1;
@@ -318,32 +321,52 @@ int grow_cell(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
     return 1;
 }
 
-struct grid_bounds_t determine_global_boundaries(struct voronoi_point_t points[], int points_len)
+int determine_region_size(struct coord_t coords[], int coords_len)
+{
+    struct grid_bounds_t bounds = determine_global_boundaries(coords, coords_len);
+
+    int region_size = 0;
+    for(int y = bounds.lower_y; y <= bounds.upper_y; y++) {
+        for(int x = bounds.lower_x; x <= bounds.upper_x; x++) {
+            int dist_to_other_points = 0;
+
+            for(int i = 0; i < coords_len; i++) {
+                dist_to_other_points += abs(x - coords[i].x) + abs(y - coords[i].y);
+            }
+
+            if(dist_to_other_points < 10000) {
+                region_size++;
+            }
+        }
+    }
+
+    return region_size;
+}
+
+struct grid_bounds_t determine_global_boundaries(struct coord_t coords[], int coords_len)
 {
     struct grid_bounds_t bounds = {
-        .lower_x = points[0].coord.x,
-        .upper_x = points[0].coord.x,
-        .lower_y = points[0].coord.y,
-        .upper_y = points[0].coord.y
+        .lower_x = coords[0].x,
+        .upper_x = coords[0].x,
+        .lower_y = coords[0].y,
+        .upper_y = coords[0].y
     };
 
-    for(int i = 0; i < points_len; i++) {
-        struct voronoi_point_t point = points[i];
-
-        if(point.coord.x < bounds.lower_x) {
-            bounds.lower_x = point.coord.x;
+    for(int i = 0; i < coords_len; i++) {
+        if(coords[i].x < bounds.lower_x) {
+            bounds.lower_x = coords[i].x;
         }
 
-        if(point.coord.x > bounds.upper_x) {
-            bounds.upper_x = point.coord.x;
+        if(coords[i].x > bounds.upper_x) {
+            bounds.upper_x =coords[i].x;
         }
 
-        if(point.coord.y < bounds.lower_y) {
-            bounds.lower_y = point.coord.y;
+        if(coords[i].y < bounds.lower_y) {
+            bounds.lower_y = coords[i].y;
         }
 
-        if(point.coord.y > bounds.upper_y) {
-            bounds.upper_y = point.coord.y;
+        if(coords[i].y > bounds.upper_y) {
+            bounds.upper_y = coords[i].y;
         }
     }
 
