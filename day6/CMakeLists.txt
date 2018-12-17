@@ -5,4 +5,4 @@ set(CMAKE_C_STANDARD 99)
 
 add_executable(aocd6 main.c)
 
-configure_file(test.in test.in COPYONLY)
+configure_file(input.in input.in COPYONLY)
