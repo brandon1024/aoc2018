@@ -21,12 +21,14 @@ struct dep_list_node_t {
 };
 
 struct simple_dep_t build_dependency_node(char buffer[], size_t buff_len);
-char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len, char *buffer, int buffer_len);
+int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep_graph_node_t **nodes_addr[]);
+void release_dependency_graph_resources(struct dep_graph_node_t *nodes[], int nodes_len);
+int populate_buffer_with_order(struct dep_graph_node_t *nodes[], int nodes_len, char *buffer, int buffer_len);
+struct dep_graph_node_t *find_next_node_with_satisfied_deps(struct dep_graph_node_t *nodes[], int nodes_len);
+int determine_completion_length(struct dep_graph_node_t *nodes[], int nodes_len);
 
 int main(int argc, char *argv[])
 {
-    char buffer[BUFF_LEN];
-
     int steps_len = BUFF_LEN;
     struct simple_dep_t *steps = (struct simple_dep_t *)malloc(sizeof(struct simple_dep_t) * steps_len);
     if(steps == NULL) {
@@ -35,6 +37,7 @@ int main(int argc, char *argv[])
     }
 
     int steps_index = 0;
+    char buffer[BUFF_LEN];
     while(fgets(buffer, BUFF_LEN, stdin) != NULL) {
         if(steps_index >= steps_len) {
             steps_len = steps_len + BUFF_LEN;
@@ -51,17 +54,29 @@ int main(int argc, char *argv[])
 
     steps_len = steps_index;
 
+    struct dep_graph_node_t **nodes = NULL;
+    int nodes_len = build_dependency_graph(steps, steps_len, &nodes);
+    free(steps);
+
     char *order = (char *)malloc(sizeof(char) * steps_len);
     if(order == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
         exit(1);
     }
 
-    memset(order, 0, steps_len);
-    order = determine_step_completion_order(steps, steps_len, order, steps_len);
-    fprintf(stdout, "In what order should the steps in your instructions be completed? %.*s", steps_len, order);
+    int steps_count = populate_buffer_with_order(nodes, nodes_len, order, steps_len);
+    if(steps_count == 0) {
+        fprintf(stderr, "Unexpected error occurred: cannot resolve dependencies.\n");
+        exit(1);
+    }
 
-    free(steps);
+    fprintf(stdout, "In what order should the steps in your instructions be completed? %.*s\n", steps_count, order);
+    free(order);
+
+    int seconds_to_complete = determine_completion_length(nodes, nodes_len);
+    fprintf(stdout, "With 5 workers and the 60+ second step durations described above, how long will it take to complete all of the steps? %d\n", seconds_to_complete);
+
+    release_dependency_graph_resources(nodes, nodes_len);
 
     return 0;
 }
@@ -91,12 +106,12 @@ struct simple_dep_t build_dependency_node(char buffer[], size_t buff_len)
     return node;
 }
 
-char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len, char *buffer, int buffer_len)
+int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep_graph_node_t **nodes_addr[])
 {
     int nodes_len = BUFF_LEN;
     int node_index = 0;
 
-    struct dep_graph_node_t *nodes = (struct dep_graph_node_t *)malloc(sizeof(struct dep_graph_node_t) * nodes_len);
+    struct dep_graph_node_t **nodes = (struct dep_graph_node_t **)malloc(sizeof(struct dep_graph_node_t *) * nodes_len);
     if(nodes == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
         exit(1);
@@ -105,8 +120,8 @@ char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len,
     for(int i = 0; i < steps_len; i++) {
         struct dep_graph_node_t *node = NULL;
         for(int j = 0; j < node_index; j++) {
-            if(nodes[j].id == steps[i].id) {
-                node = nodes + j;
+            if(nodes[j]->id == steps[i].id) {
+                node = nodes[j];
                 break;
             }
         }
@@ -114,23 +129,33 @@ char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len,
         if(node == NULL) {
             if(node_index >= nodes_len) {
                 nodes_len += BUFF_LEN;
-                nodes = (struct dep_graph_node_t *)realloc(nodes, sizeof(struct dep_graph_node_t) * nodes_len);
+                nodes = (struct dep_graph_node_t **)realloc(nodes, sizeof(struct dep_graph_node_t *) * nodes_len);
                 if(nodes == NULL) {
                     fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
                     exit(1);
                 }
             }
 
-            struct dep_graph_node_t new_node = {.id = steps[i].id, .dependencies = NULL, .complete = 0};
+
+            struct dep_graph_node_t *new_node = (struct dep_graph_node_t *)malloc(sizeof(struct dep_graph_node_t));
+            if(new_node == NULL) {
+                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+                exit(1);
+            }
+
+            new_node->id = steps[i].id;
+            new_node->dependencies = NULL;
+            new_node->complete = 0;
+
             nodes[node_index] = new_node;
-            node = nodes + node_index;
+            node = new_node;
             node_index++;
         }
 
         struct dep_graph_node_t *dep = NULL;
         for(int j = 0; j < node_index; j++) {
-            if(nodes[j].id == steps[i].depends) {
-                dep = nodes + j;
+            if(nodes[j]->id == steps[i].depends) {
+                dep = nodes[j];
                 break;
             }
         }
@@ -138,16 +163,25 @@ char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len,
         if(dep == NULL) {
             if(node_index >= nodes_len) {
                 nodes_len += BUFF_LEN;
-                nodes = (struct dep_graph_node_t *)realloc(nodes, sizeof(struct dep_graph_node_t) * nodes_len);
+                nodes = (struct dep_graph_node_t **)realloc(nodes, sizeof(struct dep_graph_node_t *) * nodes_len);
                 if(nodes == NULL) {
                     fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
                     exit(1);
                 }
             }
 
-            struct dep_graph_node_t new_node = {.id = steps[i].depends, .dependencies = NULL, .complete = 0};
+            struct dep_graph_node_t *new_node = (struct dep_graph_node_t *)malloc(sizeof(struct dep_graph_node_t));
+            if(new_node == NULL) {
+                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+                exit(1);
+            }
+
+            new_node->id = steps[i].depends;
+            new_node->dependencies = NULL;
+            new_node->complete = 0;
+
             nodes[node_index] = new_node;
-            dep = nodes + node_index;
+            dep = new_node;
             node_index++;
         }
 
@@ -163,14 +197,20 @@ char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len,
     }
 
     nodes_len = node_index;
-    nodes = (struct dep_graph_node_t *)realloc(nodes, sizeof(struct dep_graph_node_t) * nodes_len);
+    nodes = (struct dep_graph_node_t **)realloc(nodes, sizeof(struct dep_graph_node_t *) * nodes_len);
     if(nodes == NULL) {
         fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
         exit(1);
     }
 
+    *nodes_addr = nodes;
+    return nodes_len;
+}
+
+void release_dependency_graph_resources(struct dep_graph_node_t *nodes[], int nodes_len)
+{
     for(int i = 0; i < nodes_len; i++) {
-        struct dep_list_node_t *dep_node = nodes[i].dependencies;
+        struct dep_list_node_t *dep_node = nodes[i]->dependencies;
         while(dep_node != NULL) {
             struct dep_list_node_t *tmp = dep_node;
             dep_node = dep_node->next;
@@ -179,6 +219,58 @@ char *determine_step_completion_order(struct simple_dep_t *steps, int steps_len,
     }
 
     free(nodes);
+}
 
-    return NULL;
+int populate_buffer_with_order(struct dep_graph_node_t *nodes[], int nodes_len, char *buffer, int buffer_len)
+{
+    int buff_index = 0;
+
+    memset(buffer, 0, buffer_len);
+
+    struct dep_graph_node_t *node = NULL;
+    while((node = find_next_node_with_satisfied_deps(nodes, nodes_len)) != NULL) {
+        if(buff_index >= buffer_len) {
+            return 0;
+        }
+
+        buffer[buff_index] = node->id;
+        node->complete = 1;
+        buff_index++;
+    }
+
+    return buff_index;
+}
+
+struct dep_graph_node_t *find_next_node_with_satisfied_deps(struct dep_graph_node_t *nodes[], int nodes_len)
+{
+    struct dep_graph_node_t *best = NULL;
+    for(int i = 0; i < nodes_len; i++) {
+        struct dep_graph_node_t *current = nodes[i];
+
+        if(current->complete) {
+            continue;
+        }
+
+        int all_satisfied = 1;
+        struct dep_list_node_t *dep = current->dependencies;
+        while(dep != NULL) {
+            if(!dep->dependency->complete) {
+                all_satisfied = 0;
+                break;
+            }
+
+            dep = dep->next;
+        }
+
+        if(all_satisfied && (best == NULL || current->id < best->id)) {
+            best = current;
+        }
+    }
+
+    return best;
+}
+
+int determine_completion_length(struct dep_graph_node_t *nodes[], int nodes_len)
+{
+    return 0;
 }
