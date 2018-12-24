@@ -4,6 +4,9 @@
 
 #define BUFF_LEN 128
 #define GENERATIONS 20
+#define EQ_TOLERANCE 50
+#define EQ_MAX 10000
+#define EXTENDED_GENERATIONS 50000000000
 
 struct list_t {
     struct list_node_t *head;
@@ -33,6 +36,8 @@ struct list_t advance_n_generations(struct list_t initial_state, struct claim_t 
 struct list_t advance_generation(struct list_t initial_state_list, struct claim_t claims[], int claims_len);
 struct list_t duplicate_list(struct list_t list);
 int claim_matches_list(struct claim_t *claim, struct list_node_t *closest_node, long int pos);
+int sum_state_values(struct list_t list);
+long long int find_equilibrium_state_sum(struct list_t initial_state_list, struct claim_t claims[], int claims_len, long int generations);
 
 int main(int argc, char *argv[])
 {
@@ -79,15 +84,11 @@ int main(int argc, char *argv[])
     }
 
     struct list_t advanced_state_list = advance_n_generations(initial_state_list, claims, claims_len, GENERATIONS);
+    long long int sum = sum_state_values(advanced_state_list);
+    fprintf(stdout, "After 20 generations, what is the sum of the numbers of all pots which contain a plant? %lld\n", sum);
 
-    int sum = 0;
-    struct list_node_t *current = advanced_state_list.head;
-    while(current != NULL) {
-        sum += current->id;
-        current = current->next;
-    }
-
-    fprintf(stdout, "After 20 generations, what is the sum of the numbers of all pots which contain a plant? %d\n", sum);
+    sum = find_equilibrium_state_sum(initial_state_list, claims, claims_len, EXTENDED_GENERATIONS);
+    fprintf(stdout, "After fifty billion (50000000000) generations, what is the sum of the numbers of all pots which contain a plant? %lld\n", sum);
 
     free(claims);
     release_state_resources(initial_state_list);
@@ -224,6 +225,7 @@ struct list_t advance_n_generations(struct list_t initial_state_list, struct cla
 
     for(int generation = 0; generation < generations; generation++) {
         struct list_t gen_i = advance_generation(advanced_generation_list, claims, claims_len);
+
         release_state_resources(advanced_generation_list);
         advanced_generation_list = gen_i;
     }
@@ -240,9 +242,7 @@ struct list_t advance_generation(struct list_t initial_state_list, struct claim_
     struct list_t new_list = {.head = NULL, .tail = NULL};
 
     struct list_node_t *closest_relative_node = initial_state_list.head;
-    for(long int pos = initial_state_list.head->id - 2; pos < initial_state_list.tail->id + 2; pos++) {
-
-        //find list node who is closest to pos, (without being NULL)
+    for(long int pos = initial_state_list.head->id - 3; pos <= initial_state_list.tail->id + 3; pos++) {
         while(closest_relative_node->next != NULL && closest_relative_node->id < pos) {
             closest_relative_node = closest_relative_node->next;
         }
@@ -252,27 +252,28 @@ struct list_t advance_generation(struct list_t initial_state_list, struct claim_
                 continue;
             }
 
-            //if matches, create a new list node and add to new_list
-            struct list_node_t *new_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
-            if(new_node == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
-            }
+            if(claim->next_gen_plant) {
+                struct list_node_t *new_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
+                if(new_node == NULL) {
+                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
+                    exit(1);
+                }
 
-            if(new_list.head == NULL) {
-                new_node->id = pos;
-                new_node->next = NULL;
-                new_node->prev = NULL;
+                if(new_list.head == NULL) {
+                    new_node->id = pos;
+                    new_node->next = NULL;
+                    new_node->prev = NULL;
 
-                new_list.head = new_node;
-                new_list.tail = new_node;
-            } else {
-                new_node->id = pos;
-                new_node->prev = new_list.tail;
-                new_node->next = NULL;
+                    new_list.head = new_node;
+                    new_list.tail = new_node;
+                } else {
+                    new_node->id = pos;
+                    new_node->prev = new_list.tail;
+                    new_node->next = NULL;
 
-                new_list.tail->next = new_node;
-                new_list.tail = new_node;
+                    new_list.tail->next = new_node;
+                    new_list.tail = new_node;
+                }
             }
         }
     }
@@ -313,34 +314,27 @@ struct list_t duplicate_list(struct list_t list)
 
 int claim_matches_list(struct claim_t *claim, struct list_node_t *closest_node, long int pos)
 {
-    //check if claim.c matches list
     struct list_node_t *c = NULL;
     struct list_node_t *l = NULL;
     struct list_node_t *ll = NULL;
     struct list_node_t *r = NULL;
     struct list_node_t *rr = NULL;
 
-    //advance current to pos + 2
     struct list_node_t *current = closest_node;
-    while(current->next != NULL && current->id < pos + 2) {
+    while(current->next != NULL && current->id <= pos + 3) {
         current = current->next;
     }
 
-    //from pos + 2 to pos - 2
-    while(current != NULL && current->id > pos - 2) {
+    while(current != NULL && current->id >= pos - 3) {
         if(current->id == pos + 2)
             rr = current;
-
-        if(current->id == pos + 1)
+        else if(current->id == pos + 1)
             r = current;
-
-        if(current->id == pos)
+        else if(current->id == pos)
             c = current;
-
-        if(current->id == pos - 1)
+        else if(current->id == pos - 1)
             l = current;
-
-        if(current->id == pos - 2)
+        else if(current->id == pos - 2)
             ll = current;
 
         current = current->prev;
@@ -362,4 +356,52 @@ int claim_matches_list(struct claim_t *claim, struct list_node_t *closest_node, 
         return 0;
 
     return 1;
+}
+
+int sum_state_values(struct list_t list)
+{
+    int sum = 0;
+    struct list_node_t *current = list.head;
+    while(current != NULL) {
+        sum += current->id;
+        current = current->next;
+    }
+
+    return sum;
+}
+
+long long int find_equilibrium_state_sum(struct list_t initial_state_list, struct claim_t claims[], int claims_len, long int generations)
+{
+    struct list_t advanced_generation_list = duplicate_list(initial_state_list);
+
+    int diff = 0;
+    int count = 0;
+    int iterations = 0;
+    while(count < EQ_TOLERANCE) {
+        struct list_t gen_i = advance_generation(advanced_generation_list, claims, claims_len);
+
+        int current_diff = sum_state_values(gen_i) - sum_state_values(advanced_generation_list);
+        if(current_diff == diff) {
+            count++;
+        } else {
+            count = 0;
+            diff = current_diff;
+        }
+
+        release_state_resources(advanced_generation_list);
+        advanced_generation_list = gen_i;
+
+        iterations++;
+
+        if(iterations > EQ_MAX) {
+            fprintf(stderr, "Limit reached: did not reach steady state equilibrium after %d iterations.\n", EQ_MAX);
+            exit(1);
+        }
+    }
+
+    long long int sum = sum_state_values(advanced_generation_list) + (diff * (generations - iterations));
+
+    release_state_resources(advanced_generation_list);
+
+    return sum;
 }
