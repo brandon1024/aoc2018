@@ -1,4 +1,7 @@
 # Advent of Code 2018 Solutions
+
+<img src="advent.png"/>
+
 Here are my solutions for Advent of Code 2018. Each solution is written in plain C (C99), and build out of the box with no dependencies.
 
 My primary goal was to keep each solution separate and consistent. Each solution is built as its own executable, and both parts of the puzzle are solved in the same executable. For simplicity, I opted to take all puzzle input from stdin. This makes it easy to redirect the puzzle input from any file, like so: `./aocd12 < input.in`.
