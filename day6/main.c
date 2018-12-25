@@ -50,8 +50,8 @@ int main(int argc, char *argv[])
     int coords_index = 0;
     struct coord_t *coords = (struct coord_t *)malloc(sizeof(struct coord_t) * coords_len);
     if(coords == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     while((fgets(buffer, BUFF_LEN, stdin)) != NULL) {
@@ -59,8 +59,8 @@ int main(int argc, char *argv[])
             coords_len = coords_len + (BUFF_LEN * 2);
             coords = (struct coord_t *)realloc(coords, sizeof(struct coord_t) * coords_len);
             if(coords == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
         }
 
@@ -119,15 +119,15 @@ int determine_largest_area(struct coord_t coords[], int coords_len)
 {
     struct voronoi_point_t *points = (struct voronoi_point_t *)malloc(sizeof(struct voronoi_point_t) * coords_len);
     if(points == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = 0; i < coords_len; i++) {
         struct list_node_t *node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
         if(node == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         node->data = coords[i];
@@ -310,8 +310,8 @@ int grow_cell(struct grid_bounds_t bounds, struct voronoi_point_t points[], int 
 
     struct list_node_t *new_boundary_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
     if(new_boundary_node == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     new_boundary_node->data = new_boundary_coord;

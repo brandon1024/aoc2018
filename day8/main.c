@@ -56,8 +56,8 @@ struct tree_node_t *build_tree_from_stdin(FILE *stream)
         if(parent == NULL || !verify_child_nodes_count_match(parent)) {
             struct tree_node_t *node = (struct tree_node_t *)malloc(sizeof(struct tree_node_t));
             if(node == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             node->header = build_header(stream);
@@ -68,8 +68,8 @@ struct tree_node_t *build_tree_from_stdin(FILE *stream)
             if(parent != NULL) {
                 struct tree_node_child_t *new_child_node = (struct tree_node_child_t *)malloc(sizeof(struct tree_node_child_t));
                 if(new_child_node == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
 
                 new_child_node->next = parent->children;
@@ -154,8 +154,8 @@ struct tree_node_metadata_entry_t *build_metadata_list(FILE *stream, int count)
     for(int i = 0; i < count; i++) {
         struct tree_node_metadata_entry_t *list_node = (struct tree_node_metadata_entry_t *)malloc(sizeof(struct tree_node_metadata_entry_t));
         if(list_node == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         list_node->next = current;

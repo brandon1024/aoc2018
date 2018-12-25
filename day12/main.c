@@ -58,8 +58,8 @@ int main(int argc, char *argv[])
     int claims_index = 0;
     struct claim_t *claims = (struct claim_t *)malloc(sizeof(struct claim_t) * claims_len);
     if(claims == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     while(fgets(buffer, BUFF_LEN, stdin) != NULL) {
@@ -67,8 +67,8 @@ int main(int argc, char *argv[])
             claims_len += BUFF_LEN;
             claims = (struct claim_t *)realloc(claims, sizeof(struct claim_t) * claims_len);
             if(claims == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
         }
 
@@ -79,8 +79,8 @@ int main(int argc, char *argv[])
     claims_len = claims_index;
     claims = (struct claim_t *)realloc(claims, sizeof(struct claim_t) * claims_len);
     if(claims == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     struct list_t advanced_state_list = advance_n_generations(initial_state_list, claims, claims_len, GENERATIONS);
@@ -135,8 +135,8 @@ struct list_t build_initial_state_from_input(char buffer[], size_t len)
         if(*current_index == '#') {
             struct list_node_t *new_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
             if(new_node == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             if(list.tail == NULL) {
@@ -255,8 +255,8 @@ struct list_t advance_generation(struct list_t initial_state_list, struct claim_
             if(claim->next_gen_plant) {
                 struct list_node_t *new_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
                 if(new_node == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
 
                 if(new_list.head == NULL) {
@@ -289,8 +289,8 @@ struct list_t duplicate_list(struct list_t list)
     while(current != NULL) {
         struct list_node_t *new_node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
         if(new_node == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         new_node->next = NULL;

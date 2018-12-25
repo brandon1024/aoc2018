@@ -53,11 +53,10 @@ int main(int argc, char *argv[])
 {
     char *buffer = (char *)malloc(sizeof(char) * BUFF_LEN);
     if(buffer == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
-    //Build linked list of entries
     struct list_t entry_list;
     struct list_node_t *node;
     entry_list.head = NULL;
@@ -67,8 +66,8 @@ int main(int argc, char *argv[])
 
         node = (struct list_node_t *)malloc(sizeof(struct list_node_t));
         if(node == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         node->data = entry;
@@ -76,7 +75,6 @@ int main(int argc, char *argv[])
         insert_entry_into_list_sorted(&entry_list, node);
     }
 
-    //Strategy MOST_MIN_ASLEEP_STRATEGY
     struct guard_info_t candidate_guard = determine_candidate_guard(&entry_list, MOST_MIN_ASLEEP_STRATEGY);
     fprintf(stdout, "MOST_MIN_ASLEEP_STRATEGY\n");
     fprintf(stdout, "What is the ID of the guard you chose multiplied by the minute you chose? %d (%d * %d)\n",
@@ -84,7 +82,6 @@ int main(int argc, char *argv[])
             candidate_guard.guard_id,
             candidate_guard.candidate_min);
 
-    //Strategy MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY
     candidate_guard = determine_candidate_guard(&entry_list, MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY);
     fprintf(stdout, "MOST_FREQ_ASLEEP_SAME_MIN_STRATEGY\n");
     fprintf(stdout, "What is the ID of the guard you chose multiplied by the minute you chose? %d (%d * %d)\n",
@@ -197,8 +194,8 @@ struct guard_info_t determine_candidate_guard(struct list_t *entry_list, int str
     int guard_info_len = BUFF_LEN;
     struct guard_info_t *guard_info = (struct guard_info_t *)malloc(sizeof(struct guard_info_t) * guard_info_len);
     if(guard_info == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     int guard_info_index = 0;
@@ -219,7 +216,6 @@ struct guard_info_t determine_candidate_guard(struct list_t *entry_list, int str
         if(entry.shift_begin) {
             guard = find_guard_info(guard_info, guard_info_index, entry.guard_id);
             if(guard == NULL) {
-                //add new guard info
                 struct guard_info_t new_guard_info;
                 new_guard_info.guard_id = entry.guard_id;
                 memset(new_guard_info.sleep_mins, 0, sizeof(int) * 60);
@@ -321,8 +317,8 @@ struct guard_info_t most_frequently_asleep_same_min_guard(struct guard_info_t *g
 {
     struct guard_info_t **leading_sleep_freqs = (struct guard_info_t **)malloc(sizeof(struct guard_info_t *) * 60);
     if(leading_sleep_freqs == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = 0; i < 60; i++) {

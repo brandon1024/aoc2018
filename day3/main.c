@@ -2,12 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-/**
- * Advent of Code 2018: Day 3
- *
- * All inputs taken from stdin.
- * */
-
 #define FABRIC_DIM 1000
 #define BUFF_LEN 32
 
@@ -26,18 +20,17 @@ int claim_overlaps(int **fabric, struct claim_t claim);
 
 int main(int argc, char *argv[])
 {
-    //Allocate memory for 2D array of integers
     int **fabric = (int **)malloc(sizeof(int *) * FABRIC_DIM);
     if(fabric == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = 0; i < FABRIC_DIM; i++) {
         fabric[i] = (int *)malloc(sizeof(int) * FABRIC_DIM);
         if(fabric[i] == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         for(int j = 0; j < FABRIC_DIM; j++) {
@@ -45,22 +38,20 @@ int main(int argc, char *argv[])
         }
     }
 
-    //Allocate memory for buffer
     char *buffer = (char *)malloc(sizeof(char) * BUFF_LEN);
     if(buffer == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     memset(buffer, 0, sizeof(char) * BUFF_LEN);
 
-    //Allocate memory for storing claims
     int claims_len = BUFF_LEN;
     int claims_index = 0;
     struct claim_t *claims = (struct claim_t *)malloc(sizeof(struct claim_t) * claims_len);
     if(claims == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     while((fgets(buffer, BUFF_LEN, stdin)) != NULL) {
@@ -82,13 +73,12 @@ int main(int argc, char *argv[])
             }
         }
 
-        //Resize claims if necessary
         if(claims_index >= claims_len) {
             claims_len = claims_len + BUFF_LEN;
             claims = (struct claim_t *)realloc(claims, sizeof(struct claim_t) * claims_len);
             if(claims == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
         }
 
@@ -105,6 +95,7 @@ int main(int argc, char *argv[])
     for(int i = 0; i < FABRIC_DIM; i++) {
         free(fabric[i]);
     }
+
     free(fabric);
     free(buffer);
     free(claims);
@@ -118,31 +109,26 @@ struct claim_t build_claim(char *buffer, size_t buff_len)
     char *start_index;
     char *token;
 
-    //Get id
     start_index = memchr(buffer, '#', buff_len) + 1;
     token = memchr(buffer, ' ', buff_len);
     *token = 0;
     c.claim_id = strtol(start_index, &start_index, 10);
 
-    //Get y Pos
     start_index = token + 3;
     token = memchr(buffer, ',', buff_len);
     *token = 0;
     c.pos_y = strtol(start_index, &start_index, 10);
 
-    //Get x Pos
     start_index = token + 1;
     token = memchr(buffer, ':', buff_len);
     *token = 0;
     c.pos_x = strtol(start_index, &start_index, 10);
 
-    //Get y Dim
     start_index = token + 2;
     token = memchr(buffer, 'x', buff_len);
     *token = 0;
     c.dim_y = strtol(start_index, &start_index, 10);
 
-    //Get x Dim
     start_index = token + 1;
     c.dim_x = strtol(start_index, &start_index, 10);
 

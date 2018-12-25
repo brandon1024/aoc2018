@@ -16,8 +16,8 @@ int main(int argc, char *argv[])
     long int polymer_len = BUFF_LEN;
     char *polymer = (char *)malloc(sizeof(char) * BUFF_LEN);
     if(polymer == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     memset(polymer, 0, sizeof(char) * BUFF_LEN);
@@ -25,14 +25,13 @@ int main(int argc, char *argv[])
     long int polymer_index = 0;
     size_t chars_read = 0;
     while(chars_read = fread(buffer, sizeof(char), BUFF_LEN, stdin), chars_read != 0) {
-        //resize if necessary
         if((polymer_index + chars_read) > polymer_len) {
             polymer_len = polymer_len + (2 * BUFF_LEN);
 
             polymer = (char *)realloc(polymer, sizeof(char) * polymer_len);
             if(polymer == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             memset(polymer + polymer_index, 0, polymer_len - polymer_index);
@@ -45,14 +44,14 @@ int main(int argc, char *argv[])
     polymer_len = polymer_index;
     polymer = (char *)realloc(polymer, sizeof(char) * polymer_len);
     if(polymer == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     char *polymer_cpy = (char *)malloc(sizeof(char) * polymer_len);
     if(polymer_cpy == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     strncpy(polymer_cpy, polymer, polymer_len);
@@ -172,22 +171,18 @@ int reduce_polymer(char *polymer, long int polymer_len)
 
 int check_unit_similarity(const char *unit_a, const char *unit_b)
 {
-    //Verify that unit_a is a-zA-Z
     if((*unit_a < 65 || *unit_a > 90) && (*unit_a < 97 || *unit_a > 122)) {
         return 0;
     }
 
-    //Verify that unit_b is a-zA-Z
     if((*unit_b < 65 || *unit_b > 90) && (*unit_b < 97 || *unit_b > 122)) {
         return 0;
     }
 
-    //Return true if unit_a is lowercase and unit_b is uppercase, and both are same letter
     if((*unit_a >= 65 && *unit_a <= 90) && ((*unit_a + 32) == *unit_b)) {
         return 1;
     }
 
-    //Return true if unit_b is lowercase and unit_a is uppercase, and both are same letter
     if((*unit_b >= 65 && *unit_b <= 90) && (*unit_a == (*unit_b + 32))) {
         return 1;
     }

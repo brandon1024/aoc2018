@@ -75,8 +75,8 @@ long long int play(struct game_t game)
 {
     struct player_t *players = (struct player_t *)malloc(sizeof(struct player_t) * game.players_count);
     if(players == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = 0; i < game.players_count; i++) {
@@ -87,9 +87,10 @@ long long int play(struct game_t game)
 
     struct marble_t *new_marble = (struct marble_t *)malloc(sizeof(struct marble_t));
     if(new_marble == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
+
     new_marble->value = 0;
     new_marble->next = new_marble;
     new_marble->previous = new_marble;
@@ -149,8 +150,8 @@ struct marble_t *create_marble(struct marble_t *after_this, int value)
 {
     struct marble_t *new_marble = (struct marble_t *)malloc(sizeof(struct marble_t));
     if(new_marble == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     after_this->next->previous = new_marble;

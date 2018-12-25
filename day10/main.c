@@ -23,8 +23,8 @@ int main(int argc, char *argv[])
     int points_index = 0;
     struct moving_point_t *points = (struct moving_point_t *)malloc(sizeof(struct moving_point_t) * points_len);
     if(points == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     char buffer[BUFF_LEN];
@@ -33,8 +33,8 @@ int main(int argc, char *argv[])
             points_len += BUFF_LEN;
             points = (struct moving_point_t *)realloc(points, sizeof(struct moving_point_t) * points_len);
             if(points == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
         }
 
@@ -45,8 +45,8 @@ int main(int argc, char *argv[])
     points_len = points_index;
     points = (struct moving_point_t *)realloc(points, sizeof(struct moving_point_t) * points_len);
     if(points == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     long int smallest_distribution_time = find_smallest_point_distribution(points, points_len);
@@ -162,8 +162,8 @@ long int find_smallest_point_distribution(const struct moving_point_t points[], 
 {
     struct moving_point_t *mutable_points = (struct moving_point_t *)malloc(sizeof(struct moving_point_t) * points_len);
     if(mutable_points == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     memcpy(mutable_points, points, sizeof(struct moving_point_t) * points_len);

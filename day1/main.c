@@ -2,12 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/**
- * Advent of Code 2018: Day 1
- *
- * All inputs taken from stdin.
- * */
-
 #define BUFF_LEN 32
 
 int determine_frequency_reached_twice(int *offsets, int offset_len);
@@ -22,8 +16,8 @@ int main(int argc, char *argv[])
     int offsets_index = 0;
     int *offsets = (int *)malloc(sizeof(int) * offsets_len);
     if(offsets == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     while((fgets(buffer, BUFF_LEN, stdin)) != NULL) {
@@ -41,13 +35,12 @@ int main(int argc, char *argv[])
         int offset = (int)strtol(buffer, &eos, 10);
         freq = freq + offset;
 
-        //resize if necessary
         if(offsets_index >= offsets_len) {
             offsets_len = offsets_len + BUFF_LEN;
             offsets = (int *)realloc(offsets, sizeof(int) * offsets_len);
             if(offsets == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
         }
 
@@ -72,8 +65,8 @@ int determine_frequency_reached_twice(int *offsets, int offset_len)
     int freqs_encountered_len = BUFF_LEN;
     int *freqs_encountered = (int *)malloc(sizeof(int) * freqs_encountered_len);
     if(freqs_encountered == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     freqs_encountered[freqs_encountered_index] = curr_freq;
@@ -92,8 +85,8 @@ int determine_frequency_reached_twice(int *offsets, int offset_len)
                 freqs_encountered_len = freqs_encountered_len + BUFF_LEN;
                 freqs_encountered = (int *)realloc(freqs_encountered, sizeof(int) * freqs_encountered_len);
                 if(freqs_encountered == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
             }
 

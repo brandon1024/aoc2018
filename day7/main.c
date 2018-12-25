@@ -42,8 +42,8 @@ int main(int argc, char *argv[])
     int steps_len = BUFF_LEN;
     struct simple_dep_t *steps = (struct simple_dep_t *)malloc(sizeof(struct simple_dep_t) * steps_len);
     if(steps == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     int steps_index = 0;
@@ -53,8 +53,8 @@ int main(int argc, char *argv[])
             steps_len = steps_len + BUFF_LEN;
             steps = (struct simple_dep_t *)realloc(steps, sizeof(struct simple_dep_t) * steps_len);
             if(steps == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
         }
 
@@ -70,8 +70,8 @@ int main(int argc, char *argv[])
 
     char *order = (char *)malloc(sizeof(char) * steps_len);
     if(order == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     int steps_count = populate_buffer_with_order(nodes, nodes_len, order, steps_len);
@@ -124,8 +124,8 @@ int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep
 
     struct dep_graph_node_t **nodes = (struct dep_graph_node_t **)malloc(sizeof(struct dep_graph_node_t *) * nodes_len);
     if(nodes == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = 0; i < steps_len; i++) {
@@ -142,16 +142,16 @@ int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep
                 nodes_len += BUFF_LEN;
                 nodes = (struct dep_graph_node_t **)realloc(nodes, sizeof(struct dep_graph_node_t *) * nodes_len);
                 if(nodes == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
             }
 
 
             struct dep_graph_node_t *new_node = (struct dep_graph_node_t *)malloc(sizeof(struct dep_graph_node_t));
             if(new_node == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             new_node->id = steps[i].id;
@@ -176,15 +176,15 @@ int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep
                 nodes_len += BUFF_LEN;
                 nodes = (struct dep_graph_node_t **)realloc(nodes, sizeof(struct dep_graph_node_t *) * nodes_len);
                 if(nodes == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
             }
 
             struct dep_graph_node_t *new_node = (struct dep_graph_node_t *)malloc(sizeof(struct dep_graph_node_t));
             if(new_node == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             new_node->id = steps[i].depends;
@@ -198,8 +198,8 @@ int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep
 
         struct dep_list_node_t *new_list_node = (struct dep_list_node_t *)malloc(sizeof(struct dep_list_node_t));
         if(new_list_node == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         new_list_node->next = node->dependencies;
@@ -210,8 +210,8 @@ int build_dependency_graph(struct simple_dep_t *steps, int steps_len, struct dep
     nodes_len = node_index;
     nodes = (struct dep_graph_node_t **)realloc(nodes, sizeof(struct dep_graph_node_t *) * nodes_len);
     if(nodes == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     *nodes_addr = nodes;
@@ -300,7 +300,6 @@ int determine_completion_length(struct dep_graph_node_t *nodes[], int nodes_len)
     int time_count = 0;
     int steps_complete = 0;
     while(!steps_complete) {
-        //first, update any workers (if timer runs out, set job to null, otherwise increment timer)
         for(int i = 0; i < WORKERS; i++) {
             if(workers[i].job != NULL) {
                 if(workers[i].timer == workers[i].completion_time) {
@@ -314,7 +313,6 @@ int determine_completion_length(struct dep_graph_node_t *nodes[], int nodes_len)
             }
         }
 
-        //next, fill any worker jobs if the job field is NULL
         for(int i = 0; i < WORKERS; i++) {
             if(workers[i].job == NULL) {
                 struct dep_graph_node_t *new_job = find_next_free_node_with_satisfied_deps(nodes, nodes_len, workers, WORKERS);
@@ -326,7 +324,6 @@ int determine_completion_length(struct dep_graph_node_t *nodes[], int nodes_len)
             }
         }
 
-        //if all workers fields are null and no jobs left, then exit loop
         int workers_working = 0;
         for(int i = 0; i < WORKERS; i++) {
             if(workers[i].job != NULL) {

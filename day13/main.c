@@ -18,6 +18,7 @@ struct cart_t {
     struct coord_t coord;
     struct track_t *track;
     unsigned char dir;
+    unsigned char next_dir;
 };
 
 struct track_t {
@@ -101,15 +102,15 @@ struct system_t build_system_from_input(FILE *input_stream)
                     system.tracks_len += BUFF_LEN;
                     system.tracks = (struct track_t **)realloc(system.tracks, sizeof(struct track_t *) * system.tracks_len);
                     if(system.tracks == NULL) {
-                        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                        exit(1);
+                        perror("Fatal error: Cannot allocate memory.\n");
+                        exit(EXIT_FAILURE);
                     }
                 }
 
                 struct track_t *track = (struct track_t *)malloc(sizeof(struct track_t));
                 if(track == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
 
                 struct coord_t left = {.x = (unsigned short int)(track_start - buffer), .y = row};
@@ -182,15 +183,15 @@ struct system_t build_system_from_input(FILE *input_stream)
                 system.carts_len += BUFF_LEN;
                 system.carts = (struct cart_t **)realloc(system.carts, sizeof(struct cart_t *) * system.carts_len);
                 if(system.carts == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
             }
 
             struct cart_t *new_cart = (struct cart_t *)malloc(sizeof(struct cart_t));
             if(new_cart == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             system.carts[carts_index] = new_cart;
@@ -208,15 +209,15 @@ struct system_t build_system_from_input(FILE *input_stream)
                 system.intersections_len += BUFF_LEN;
                 system.intersections = (struct intersection_t **)realloc(system.intersections, sizeof(struct intersection_t *) * system.intersections_len);
                 if(system.intersections == NULL) {
-                    fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                    exit(1);
+                    perror("Fatal error: Cannot allocate memory.\n");
+                    exit(EXIT_FAILURE);
                 }
             }
 
             struct intersection_t *new_intersection = (struct intersection_t *)malloc(sizeof(struct intersection_t));
             if(new_intersection == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
 
             system.intersections[intersections_index] = new_intersection;
@@ -321,22 +322,22 @@ struct system_t build_system_from_input(FILE *input_stream)
     system.tracks_len = tracks_index;
     system.tracks = (struct track_t **)realloc(system.tracks, sizeof(struct track_t *) * system.tracks_len);
     if(system.tracks == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     system.carts_len = carts_index;
     system.carts = (struct cart_t **)realloc(system.carts, sizeof(struct cart_t *) * system.carts_len);
     if(system.carts == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     system.intersections_len = intersections_index;
     system.intersections = (struct intersection_t **)realloc(system.intersections, sizeof(struct intersection_t *) * system.intersections_len);
     if(system.intersections == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     return system;

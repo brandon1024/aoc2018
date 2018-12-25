@@ -2,12 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-/**
- * Advent of Code 2018: Day 2
- *
- * All inputs taken from stdin.
- * */
-
 #define BUFF_LEN 32
 
 unsigned char id_multiples(char *id, int occr);
@@ -21,8 +15,8 @@ int main(int argc, char *argv[])
 
     char **ids = (char **)malloc(sizeof(char *) * ids_len);
     if(ids == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = ids_index; i < ids_len; i++) {
@@ -31,8 +25,8 @@ int main(int argc, char *argv[])
 
     char *buffer = (char *)malloc(sizeof(char) * BUFF_LEN);
     if(buffer == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     int freq2 = 0;
@@ -57,24 +51,23 @@ int main(int argc, char *argv[])
             freq3++;
         }
 
-        //Resize ids if necessary
         if(ids_index >= ids_len) {
             ids_len = ids_len + BUFF_LEN;
             ids = (char **)realloc(ids, sizeof(char *) * ids_len);
             if(ids == NULL) {
-                fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-                exit(1);
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
             }
+
             for(int i = ids_index; i < ids_len; i++) {
                 ids[i] = NULL;
             }
         }
 
-        //Append id to ids
         char *str = (char *)malloc(sizeof(char) * strlen(buffer));
         if(str == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         strcpy(str, buffer);
@@ -82,7 +75,6 @@ int main(int argc, char *argv[])
         ids_index++;
     }
 
-    //Find Common Ids
     buffer = find_common_chars(ids, ids_len, buffer, BUFF_LEN);
     if(buffer == NULL) {
         fprintf(stderr, "Fatal error: Unexpected error occurred while finding matching characters.\n");
@@ -92,12 +84,12 @@ int main(int argc, char *argv[])
     fprintf(stdout, "Resulting Checksum: %d (%d * %d)\n", freq2 * freq3, freq2, freq3);
     fprintf(stdout, "Common Characters: %s\n", buffer);
 
-    //Free memory
     for(ids_index = 0; ids_index < ids_len; ids_index++) {
         if(ids[ids_index] != NULL) {
             free(ids[ids_index]);
         }
     }
+
     free(ids);
     free(buffer);
 

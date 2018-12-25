@@ -63,15 +63,15 @@ int **build_power_values_table(int dim, int grid_serial_num)
 {
     int **power_values = (int **)malloc(sizeof(int *) * dim);
     if(power_values == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for(int i = 0; i < CELL_DIM; i++) {
         power_values[i] = (int *)malloc(sizeof(int) * dim);
         if(power_values[i] == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
 
         for(int j = 0; j < CELL_DIM; j++) {
@@ -96,15 +96,15 @@ int determine_power_value(struct coord_t coord, int grid_serial_number)
 int **build_summed_area_table(int *power_values[], int dim) {
     int **sat = (int **) malloc(sizeof(int *) * dim);
     if (sat == NULL) {
-        fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-        exit(1);
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
     }
 
     for (int i = 0; i < CELL_DIM; i++) {
         sat[i] = (int *) malloc(sizeof(int) * dim);
         if (sat[i] == NULL) {
-            fprintf(stderr, "Fatal error: Cannot allocate memory.\n");
-            exit(1);
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
         }
     }
 
