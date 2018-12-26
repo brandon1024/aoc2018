@@ -27,6 +27,7 @@ struct track_t {
     struct coord_t bl;
     struct coord_t br;
     struct intersection_t **intersections;
+    size_t intersections_index;
     size_t intersections_len;
     unsigned int initialized: 1;
 };
@@ -38,7 +39,7 @@ struct intersection_t {
 };
 
 struct system_t {
-    unsigned long tick;
+    unsigned long int tick;
     struct cart_t **carts;
     size_t carts_len;
     struct track_t **tracks;
@@ -51,6 +52,8 @@ struct system_t build_system_from_input(FILE *input_stream);
 void release_system_resources(struct system_t system);
 struct coord_t determine_first_crash_coord(struct system_t system);
 char *mem_search_chars(const char *buffer, const char *str, size_t buff_len);
+struct cart_t **sort_carts_by_coord_position(struct cart_t *carts[], size_t carts_len);
+int coords_equal(struct coord_t coord_1, struct coord_t coord_2);
 
 int main(int argc, char *argv[])
 {
@@ -115,7 +118,7 @@ struct system_t build_system_from_input(FILE *input_stream)
 
                 struct coord_t left = {.x = (unsigned short int)(track_start - buffer), .y = row};
                 struct coord_t right = {.x = (unsigned short int)(track_end - buffer), .y = row};
-                *track = (struct track_t){.tl = left, .tr = right, .intersections = NULL, .intersections_len = 0, .initialized = 0};
+                *track = (struct track_t){.tl = left, .tr = right, .intersections = NULL, .intersections_len = 0, .intersections_index = 0, .initialized = 0};
 
                 system.tracks[tracks_index] = track;
 
@@ -133,7 +136,7 @@ struct system_t build_system_from_input(FILE *input_stream)
                 struct coord_t right = {.x = (unsigned short int)(track_end - buffer), .y = row};
 
                 struct track_t *closest_track = NULL;
-                for(int index = 0; index < tracks_index; index++) {
+                for(size_t index = 0; index < tracks_index; index++) {
                     if(system.tracks[index]->initialized) {
                         continue;
                     }
@@ -197,6 +200,7 @@ struct system_t build_system_from_input(FILE *input_stream)
             system.carts[carts_index] = new_cart;
             new_cart->coord = (struct coord_t){.x = (unsigned short int)(cart - buffer), .y = row};
             new_cart->dir = dir;
+            new_cart->next_dir = DIR_LEFT;
             new_cart->track = NULL;
 
             cart++;
@@ -237,11 +241,18 @@ struct system_t build_system_from_input(FILE *input_stream)
         row++;
     }
 
-    for(int cart_index = 0; cart_index < carts_index; cart_index++) {
+    for(size_t track_index = 0; track_index < tracks_index; track_index++) {
+        if(!system.tracks[track_index]->initialized) {
+            fprintf(stderr, "Unexpected error: all tracks should be initialized.\n");
+            exit(1);
+        }
+    }
+
+    for(size_t cart_index = 0; cart_index < carts_index; cart_index++) {
         struct cart_t *cart = system.carts[cart_index];
         struct track_t *track = NULL;
 
-        for(int index = 0; index < tracks_index; index++) {
+        for(size_t index = 0; index < tracks_index; index++) {
             struct track_t *track_i = system.tracks[index];
 
             if(cart->dir == DIR_UP || cart->dir == DIR_DOWN) {
@@ -273,12 +284,12 @@ struct system_t build_system_from_input(FILE *input_stream)
         cart->track = track;
     }
 
-    for(int intersection_index = 0; intersection_index < intersections_index; intersection_index++) {
+    for(size_t intersection_index = 0; intersection_index < intersections_index; intersection_index++) {
         struct intersection_t *intersection = system.intersections[intersection_index];
 
         struct track_t *horizontal_track = NULL;
         struct track_t *vertical_track = NULL;
-        for(int h_index = 0; h_index < tracks_index; h_index++) {
+        for(size_t h_index = 0; h_index < tracks_index; h_index++) {
             struct track_t *tmp_h_track = system.tracks[h_index];
             if(tmp_h_track->tl.y != intersection->coord.y && tmp_h_track->bl.y != intersection->coord.y) {
                 continue;
@@ -288,25 +299,25 @@ struct system_t build_system_from_input(FILE *input_stream)
                 continue;
             }
 
-            for(int v_index = 0; v_index < tracks_index; v_index++) {
-                struct track_t *tmp_v_track = system.tracks[v_index];
-                if(h_index == v_index) {
-                    continue;
-                }
+            horizontal_track = tmp_h_track;
+            break;
+        }
 
-                if(tmp_v_track->tl.x != intersection->coord.x && tmp_v_track->tr.x != intersection->coord.x) {
-                    continue;
-                }
-
-                if(intersection->coord.y < tmp_v_track->tl.y || intersection->coord.y > tmp_v_track->bl.y) {
-                    continue;
-                }
-
-                vertical_track = tmp_v_track;
-                break;
+        for(size_t v_index = 0; v_index < tracks_index; v_index++) {
+            struct track_t *tmp_v_track = system.tracks[v_index];
+            if(tmp_v_track == horizontal_track) {
+                continue;
             }
 
-            horizontal_track = tmp_h_track;
+            if(tmp_v_track->tl.x != intersection->coord.x && tmp_v_track->tr.x != intersection->coord.x) {
+                continue;
+            }
+
+            if(intersection->coord.y < tmp_v_track->tl.y || intersection->coord.y > tmp_v_track->bl.y) {
+                continue;
+            }
+
+            vertical_track = tmp_v_track;
             break;
         }
 
@@ -317,6 +328,30 @@ struct system_t build_system_from_input(FILE *input_stream)
 
         intersection->track_a = horizontal_track;
         intersection->track_b = vertical_track;
+
+        if(horizontal_track->intersections_index >= horizontal_track->intersections_len) {
+            horizontal_track->intersections_len += BUFF_LEN;
+            horizontal_track->intersections = (struct intersection_t **)realloc(horizontal_track->intersections, sizeof(struct intersection_t *) * horizontal_track->intersections_len);
+            if(horizontal_track->intersections == NULL) {
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        horizontal_track->intersections[horizontal_track->intersections_index] = intersection;
+        horizontal_track->intersections_index++;
+
+        if(vertical_track->intersections_index >= vertical_track->intersections_len) {
+            vertical_track->intersections_len += BUFF_LEN;
+            vertical_track->intersections = (struct intersection_t **)realloc(vertical_track->intersections, sizeof(struct intersection_t *) * vertical_track->intersections_len);
+            if(vertical_track->intersections == NULL) {
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        vertical_track->intersections[vertical_track->intersections_index] = intersection;
+        vertical_track->intersections_index++;
     }
 
     system.tracks_len = tracks_index;
@@ -338,6 +373,16 @@ struct system_t build_system_from_input(FILE *input_stream)
     if(system.intersections == NULL) {
         perror("Fatal error: Cannot allocate memory.\n");
         exit(EXIT_FAILURE);
+    }
+
+    for(size_t track_index = 0; track_index < system.tracks_len; track_index++) {
+        struct track_t *track = system.tracks[track_index];
+        track->intersections_len = track->intersections_index;
+        track->intersections = (struct intersection_t **)realloc(track->intersections, sizeof(struct intersection_t *) * track->intersections_len);
+        if(track->intersections == NULL) {
+            perror("Fatal error: Cannot allocate memory.\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     return system;
@@ -365,7 +410,102 @@ void release_system_resources(struct system_t system)
 
 struct coord_t determine_first_crash_coord(struct system_t system)
 {
-    return (struct coord_t){.x = 0, .y = 0};
+    struct coord_t crash_coord = {.x = 0, .y = 0};
+    int crash_encountered = 0;
+    while(!crash_encountered) {
+        system.carts = sort_carts_by_coord_position(system.carts, system.carts_len);
+
+        for(size_t cart_index = 0; cart_index < system.carts_len; cart_index++) {
+            struct cart_t *cart = system.carts[cart_index];
+            if(cart->dir == DIR_UP || cart->dir == DIR_DOWN) {
+                cart->dir == DIR_UP ? cart->coord.y-- : cart->coord.y++;
+            } else {
+                cart->dir == DIR_LEFT ? cart->coord.x-- : cart->coord.x++;
+            }
+
+            if(coords_equal(cart->coord, cart->track->tl)) {
+                cart->dir = (unsigned char)(cart->dir == DIR_UP ? DIR_RIGHT : DIR_DOWN);
+            } else if(coords_equal(cart->coord, cart->track->bl)) {
+                cart->dir = (unsigned char)(cart->dir == DIR_DOWN ? DIR_RIGHT : DIR_UP);
+            } else if(coords_equal(cart->coord, cart->track->tr)) {
+                cart->dir = (unsigned char)(cart->dir == DIR_UP ? DIR_LEFT : DIR_DOWN);
+            } else if(coords_equal(cart->coord, cart->track->br)) {
+                cart->dir = (unsigned char)(cart->dir == DIR_DOWN ? DIR_LEFT : DIR_UP);
+            } else {
+                struct intersection_t *intersection = NULL;
+                for(size_t intersection_index = 0; intersection_index < cart->track->intersections_len; intersection_index++) {
+                    struct intersection_t *tmp = cart->track->intersections[intersection_index];
+
+                    if(coords_equal(cart->coord, tmp->coord)) {
+                        intersection = tmp;
+                        break;
+                    }
+                }
+
+                if(intersection != NULL) {
+                    if(cart->next_dir == DIR_LEFT) {
+                        switch(cart->dir) {
+                            case DIR_UP:
+                                cart->dir = DIR_LEFT;
+                                break;
+                            case DIR_DOWN:
+                                cart->dir = DIR_RIGHT;
+                                break;
+                            case DIR_LEFT:
+                                cart->dir = DIR_DOWN;
+                                break;
+                            default:
+                                cart->dir = DIR_UP;
+                                break;
+                        }
+
+                        cart->next_dir = 0;
+                        cart->track = (cart->track == intersection->track_a) ? intersection->track_b : intersection->track_a;
+                    } else if(cart->next_dir == DIR_RIGHT) {
+                        switch(cart->dir) {
+                            case DIR_UP:
+                                cart->dir = DIR_RIGHT;
+                                break;
+                            case DIR_DOWN:
+                                cart->dir = DIR_LEFT;
+                                break;
+                            case DIR_LEFT:
+                                cart->dir = DIR_UP;
+                                break;
+                            default:
+                                cart->dir = DIR_DOWN;
+                                break;
+                        }
+
+                        cart->next_dir = DIR_LEFT;
+                        cart->track = (cart->track == intersection->track_a) ? intersection->track_b : intersection->track_a;
+                    } else {
+                        cart->next_dir = DIR_RIGHT;
+                    }
+                }
+            }
+
+            for(size_t collision_check = 0; collision_check < system.carts_len; collision_check++) {
+                if(collision_check == cart_index) {
+                    continue;
+                }
+
+                if(coords_equal(cart->coord, system.carts[collision_check]->coord)) {
+                    crash_coord = cart->coord;
+                    crash_encountered = 1;
+                    break;
+                }
+            }
+
+            if(crash_encountered) {
+                break;
+            }
+        }
+
+        system.tick++;
+    }
+
+    return crash_coord;
 }
 
 char *mem_search_chars(const char *buffer, const char *str, size_t buff_len)
@@ -375,7 +515,7 @@ char *mem_search_chars(const char *buffer, const char *str, size_t buff_len)
     }
 
     char *found = NULL;
-    for(int i = 0; i < strlen(str); i++) {
+    for(size_t i = 0; i < strlen(str); i++) {
         char *tmp = memchr(buffer, str[i], buff_len);
         if(found == NULL || (tmp != NULL && tmp < found)) {
             found = tmp;
@@ -383,4 +523,38 @@ char *mem_search_chars(const char *buffer, const char *str, size_t buff_len)
     }
 
     return found;
+}
+
+struct cart_t **sort_carts_by_coord_position(struct cart_t *carts[], size_t carts_len)
+{
+    for(size_t current_index = 0; current_index < carts_len; current_index++) {
+        for(size_t candidate_index = current_index + 1; candidate_index < carts_len; candidate_index++) {
+            if(carts[candidate_index]->coord.y > carts[current_index]->coord.y) {
+                continue;
+            }
+
+            if(carts[candidate_index]->coord.y == carts[current_index]->coord.y && carts[candidate_index]->coord.x > carts[current_index]->coord.x) {
+                continue;
+            }
+
+            struct cart_t *tmp = carts[current_index];
+            carts[current_index] = carts[candidate_index];
+            carts[candidate_index] = tmp;
+        }
+    }
+
+    return carts;
+}
+
+int coords_equal(struct coord_t coord_1, struct coord_t coord_2)
+{
+    if(coord_1.x != coord_2.x) {
+        return 0;
+    }
+
+    if(coord_1.y != coord_2.y) {
+        return 0;
+    }
+
+    return 1;
 }
