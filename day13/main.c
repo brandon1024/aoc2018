@@ -19,6 +19,8 @@ struct cart_t {
     struct track_t *track;
     unsigned char dir;
     unsigned char next_dir;
+    unsigned char crashed: 1;
+    unsigned char visited: 1;
 };
 
 struct track_t {
@@ -46,23 +48,24 @@ struct system_t {
     size_t tracks_len;
     struct intersection_t **intersections;
     size_t intersections_len;
+    struct coord_t first_crash_coord;
+    struct coord_t last_cart_coord;
 };
 
 struct system_t build_system_from_input(FILE *input_stream);
 void release_system_resources(struct system_t system);
-struct coord_t determine_first_crash_coord(struct system_t system);
+struct system_t determine_first_crash_coord(struct system_t system);
 char *mem_search_chars(const char *buffer, const char *str, size_t buff_len);
-struct cart_t **sort_carts_by_coord_position(struct cart_t *carts[], size_t carts_len);
+int sort_carts_by_coord_position(struct cart_t *carts[], size_t carts_len);
 int coords_equal(struct coord_t coord_1, struct coord_t coord_2);
 
 int main(int argc, char *argv[])
 {
-    freopen("input.in", "r", stdin);
-
     struct system_t system = build_system_from_input(stdin);
-    struct coord_t first_crash = determine_first_crash_coord(system);
+    system = determine_first_crash_coord(system);
 
-    fprintf(stdout, "Where is the location (X,Y) of the first crash? %hu,%hu\n", first_crash.x, first_crash.y);
+    fprintf(stdout, "Where is the location (X,Y) of the first crash? %hu,%hu\n", system.first_crash_coord.x, system.first_crash_coord.y);
+    fprintf(stdout, "What is the location of the last cart at the end of the first tick where it is the only cart left? %hu,%hu\n", system.last_cart_coord.x, system.last_cart_coord.y);
 
     release_system_resources(system);
 
@@ -202,6 +205,8 @@ struct system_t build_system_from_input(FILE *input_stream)
             new_cart->dir = dir;
             new_cart->next_dir = DIR_LEFT;
             new_cart->track = NULL;
+            new_cart->crashed = 0;
+            new_cart->visited = 0;
 
             cart++;
             carts_index++;
@@ -354,6 +359,11 @@ struct system_t build_system_from_input(FILE *input_stream)
         vertical_track->intersections_index++;
     }
 
+    if(carts_index % 2 == 0) {
+        fprintf(stderr, "Unexpected error: expected odd number of carts.\n");
+        exit(1);
+    }
+
     system.tracks_len = tracks_index;
     system.tracks = (struct track_t **)realloc(system.tracks, sizeof(struct track_t *) * system.tracks_len);
     if(system.tracks == NULL) {
@@ -408,15 +418,27 @@ void release_system_resources(struct system_t system)
     free(system.intersections);
 }
 
-struct coord_t determine_first_crash_coord(struct system_t system)
+struct system_t determine_first_crash_coord(struct system_t system)
 {
-    struct coord_t crash_coord = {.x = 0, .y = 0};
     int crash_encountered = 0;
-    while(!crash_encountered) {
-        system.carts = sort_carts_by_coord_position(system.carts, system.carts_len);
+    int carts_left = 0;
+    do {
+        sort_carts_by_coord_position(system.carts, system.carts_len);
 
-        for(size_t cart_index = 0; cart_index < system.carts_len; cart_index++) {
-            struct cart_t *cart = system.carts[cart_index];
+        do {
+            struct cart_t *cart = NULL;
+            for(size_t cart_index = 0; cart_index < system.carts_len; cart_index++) {
+                if(!system.carts[cart_index]->visited && !system.carts[cart_index]->crashed) {
+                    cart = system.carts[cart_index];
+                    cart->visited = 1;
+                    break;
+                }
+            }
+
+            if(cart == NULL) {
+                break;
+            }
+
             if(cart->dir == DIR_UP || cart->dir == DIR_DOWN) {
                 cart->dir == DIR_UP ? cart->coord.y-- : cart->coord.y++;
             } else {
@@ -486,26 +508,37 @@ struct coord_t determine_first_crash_coord(struct system_t system)
             }
 
             for(size_t collision_check = 0; collision_check < system.carts_len; collision_check++) {
-                if(collision_check == cart_index) {
+                if(system.carts[collision_check] == cart) {
                     continue;
                 }
 
-                if(coords_equal(cart->coord, system.carts[collision_check]->coord)) {
-                    crash_coord = cart->coord;
-                    crash_encountered = 1;
+                if(!system.carts[collision_check]->crashed && coords_equal(cart->coord, system.carts[collision_check]->coord)) {
+                    if(!crash_encountered) {
+                        system.first_crash_coord = cart->coord;
+                        crash_encountered = 1;
+                    }
+
+                    cart->crashed = 1;
+                    system.carts[collision_check]->crashed = 1;
                     break;
                 }
             }
-
-            if(crash_encountered) {
-                break;
-            }
-        }
+        } while(1);
 
         system.tick++;
-    }
 
-    return crash_coord;
+        carts_left = 0;
+        for(size_t cart_index = 0; cart_index < system.carts_len; cart_index++) {
+            system.carts[cart_index]->visited = 0;
+
+            if(!system.carts[cart_index]->crashed) {
+                system.last_cart_coord = system.carts[cart_index]->coord;
+                carts_left++;
+            }
+        }
+    } while(carts_left > 1);
+
+    return system;
 }
 
 char *mem_search_chars(const char *buffer, const char *str, size_t buff_len)
@@ -525,25 +558,36 @@ char *mem_search_chars(const char *buffer, const char *str, size_t buff_len)
     return found;
 }
 
-struct cart_t **sort_carts_by_coord_position(struct cart_t *carts[], size_t carts_len)
+int sort_carts_by_coord_position(struct cart_t *carts[], size_t carts_len)
 {
+    if(carts == NULL) {
+        return 0;
+    }
+
     for(size_t current_index = 0; current_index < carts_len; current_index++) {
         for(size_t candidate_index = current_index + 1; candidate_index < carts_len; candidate_index++) {
-            if(carts[candidate_index]->coord.y > carts[current_index]->coord.y) {
+            if(carts[candidate_index] == NULL) {
                 continue;
             }
 
-            if(carts[candidate_index]->coord.y == carts[current_index]->coord.y && carts[candidate_index]->coord.x > carts[current_index]->coord.x) {
-                continue;
+            if(carts[current_index] != NULL) {
+                if(carts[candidate_index]->coord.y > carts[current_index]->coord.y) {
+                    continue;
+                }
+
+                if(carts[candidate_index]->coord.y == carts[current_index]->coord.y && carts[candidate_index]->coord.x > carts[current_index]->coord.x) {
+                    continue;
+                }
             }
 
             struct cart_t *tmp = carts[current_index];
             carts[current_index] = carts[candidate_index];
             carts[candidate_index] = tmp;
+            break;
         }
     }
 
-    return carts;
+    return 1;
 }
 
 int coords_equal(struct coord_t coord_1, struct coord_t coord_2)
