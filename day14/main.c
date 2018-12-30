@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 
 #define BUFF_LEN 64
 #define LAST_RECIPES 10
 
 int fill_last_n_recipe_scores(size_t recipes_count, uint8_t last_recipes[], size_t last_count);
+size_t find_recipes_before_sequence(size_t sequence, size_t sequence_len);
 uint8_t get_nibble(const uint8_t *numbers, size_t nibble_len, size_t nibble_index);
 uint8_t set_nibble(uint8_t *numbers, size_t nibble_len, size_t nibble_index, uint8_t value);
 
@@ -45,8 +47,8 @@ int main(int argc, char *argv[])
 
     fprintf(stdout, "\n");
 
-    fprintf(stdout, "How many recipes appear on the scoreboard to the left of the score sequence in your puzzle input? ");
-    fprintf(stdout, "\n");
+    size_t recipes_before_sequence = find_recipes_before_sequence(recipes, strlen(buffer));
+    fprintf(stdout, "How many recipes appear on the scoreboard to the left of the score sequence in your puzzle input? %lu\n", recipes_before_sequence);
 
     free(last_recipes);
 
@@ -56,14 +58,13 @@ int main(int argc, char *argv[])
 int fill_last_n_recipe_scores(size_t recipes_count, uint8_t last_recipes[], size_t last_count)
 {
     size_t scores_len = (recipes_count + 10) * 2;
-
+    size_t recipes_index = 0;
     uint8_t *scores = (uint8_t *)calloc((recipes_count + 10), sizeof(uint8_t));
     if(scores == NULL) {
         perror("Fatal error: Cannot allocate memory.\n");
         exit(EXIT_FAILURE);
     }
 
-    size_t recipes_index = 0;
     size_t p1i = 0, p2i = 1;
 
     set_nibble(scores, scores_len, recipes_index, 3);
@@ -99,6 +100,94 @@ int fill_last_n_recipe_scores(size_t recipes_count, uint8_t last_recipes[], size
     free(scores);
 
     return 0;
+}
+
+size_t find_recipes_before_sequence(size_t sequence, size_t sequence_len)
+{
+    uint8_t *digits = (uint8_t *)malloc(sequence_len * sizeof(uint8_t));
+    if(digits == NULL) {
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t sequence_tmp = sequence;
+    for(size_t index = sequence_len; index > 0; index--) {
+        digits[index - 1] = (uint8_t)(sequence_tmp % 10);
+        sequence_tmp /= 10;
+    }
+
+    size_t scores_len = BUFF_LEN;
+    size_t recipes_index = 0;
+    uint8_t *scores = (uint8_t *)malloc(sizeof(uint8_t) * scores_len);
+    if(scores == NULL) {
+        perror("Fatal error: Cannot allocate memory.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t p1i = 0, p2i = 1;
+
+    set_nibble(scores, scores_len * 2, recipes_index, 3);
+    recipes_index++;
+    set_nibble(scores, scores_len * 2, recipes_index, 7);
+    recipes_index++;
+
+    size_t match_index = 0;
+    while(match_index < sequence_len) {
+        uint8_t sum = get_nibble(scores, scores_len * 2, p1i) + get_nibble(scores, scores_len * 2, p2i);
+
+        if((recipes_index+1) >= (scores_len * 2)) {
+            scores_len += BUFF_LEN;
+            scores = (uint8_t *)realloc(scores, sizeof(uint8_t) * scores_len);
+            if(scores == NULL) {
+                perror("Fatal error: Cannot allocate memory.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if(sum < 10) {
+            set_nibble(scores, scores_len * 2, recipes_index, sum);
+            recipes_index++;
+
+            if(sum == digits[match_index]) {
+                match_index++;
+            } else {
+                match_index = (sum == digits[0]) ? 1 : 0;
+            }
+        } else {
+            uint8_t msd = sum / (uint8_t)10;
+            uint8_t lsd = sum % (uint8_t)10;
+
+            set_nibble(scores, scores_len * 2, recipes_index, msd);
+            recipes_index++;
+
+            set_nibble(scores, scores_len * 2, recipes_index, lsd);
+            recipes_index++;
+
+            if(msd == digits[match_index]) {
+                match_index++;
+            } else {
+                match_index = (msd == digits[0]) ? 1 : 0;
+            }
+
+            if(match_index == sequence_len) {
+                break;
+            }
+
+            if(lsd == digits[match_index]) {
+                match_index++;
+            } else {
+                match_index = (lsd == digits[0]) ? 1 : 0;
+            }
+        }
+
+        p1i = (p1i + 1 + get_nibble(scores, scores_len * 2, p1i)) % recipes_index;
+        p2i = (p2i + 1 + get_nibble(scores, scores_len * 2, p2i)) % recipes_index;
+    }
+
+    free(scores);
+    free(digits);
+
+    return recipes_index - sequence_len;
 }
 
 uint8_t get_nibble(const uint8_t *numbers, size_t nibble_len, size_t nibble_index)
