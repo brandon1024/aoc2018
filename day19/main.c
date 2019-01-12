@@ -66,8 +66,11 @@ int main(int argc, char *argv[])
     }
 
     execute(&program);
-
     fprintf(stdout, "What value is left in register 0 when the background process halts? %d\n", program.registers[0]);
+
+    fprintf(stdout, "Part 2 cannot be easily computed (in an efficient manner),\n"
+                    "and requires a bit of reverse engineering to optimize before\n"
+                    "it can be computed in a reasonable amount of time.\n");
 
     free(program.instructions);
 
@@ -171,7 +174,7 @@ int compile(FILE *fd, struct program_t *program)
 int execute(struct program_t *program)
 {
     memset(program->registers, 0, sizeof(unsigned int) * 6);
-    program->registers[0] = 1;
+    program->registers[0] = 0;
 
     while(program->registers[program->pc_reg] >= 0 && program->registers[program->pc_reg] < program->program_len) {
         struct operation_t op = program->instructions[program->registers[program->pc_reg]];
